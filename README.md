@@ -1,28 +1,55 @@
-# Duet (household-calendar)
+# Duet
 
-**Duet** — premium shared household calendar for couples (iPhone PWA), orchestrated by Hermes + built by Grok Build.
+Premium shared household calendar for couples — events, tasks, shopping, meals.
+iPhone-first **PWA**. Hermes orchestrates; Grok Build implements feature mini-PRDs.
 
-**Repo:** https://github.com/mildew2326/household-calendar  
-**Status:** Discovery complete for architecture gates; deepening mini-PRDs next
+**Repo:** https://github.com/mildew2326/household-calendar
 
-## Docs
+## Quick start (demo mode — no cloud required)
+
+```bash
+cd /home/carl/Projects/household-calendar
+npm install
+npm run dev
+# open http://localhost:3000 → Open demo app
+```
+
+```bash
+npm test    # privacy projection unit tests
+npm run build
+```
+
+## Supabase (live auth + sync)
+
+1. Create a Supabase project.
+2. Run SQL in `supabase/migrations/20260713_init.sql`.
+3. Copy `.env.example` → `.env.local` and set:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. Enable Auth → Email magic links.
+5. `npm run dev`
+
+## Product docs
 
 | Doc | Purpose |
-|---|---|
-| [docs/prd/MASTER_PRD.md](docs/prd/MASTER_PRD.md) | Master product requirements |
-| [docs/prd/INTERVIEW.md](docs/prd/INTERVIEW.md) | Open product decisions |
-| [docs/research/competitive-feature-matrix.md](docs/research/competitive-feature-matrix.md) | Additive feature inventory from market leaders |
-| [docs/prd/features/](docs/prd/features/) | Focused mini-PRDs for Grok Build |
+|-----|---------|
+| [docs/prd/MASTER_PRD.md](docs/prd/MASTER_PRD.md) | Master PRD |
+| [docs/prd/INTERVIEW.md](docs/prd/INTERVIEW.md) | Locked decisions |
+| [docs/research/competitive-feature-matrix.md](docs/research/competitive-feature-matrix.md) | Market matrix |
+| [docs/prd/features/](docs/prd/features/) | Grok Build mini-PRDs |
 
-## Operating model
+## Stack
 
-1. Hermes researches, writes mini-PRDs, prioritizes, verifies.
-2. Human answers interview gates and taste decisions.
-3. Grok Build implements one mini-PRD at a time with acceptance tests.
-4. Hermes verifies and sequences the next feature.
+Next.js 15 · TypeScript · Tailwind 4 · Supabase · date-fns · rrule · Vitest
 
-## Next steps
+## iPhone
 
-1. Complete `docs/prd/INTERVIEW.md` answers.
-2. Expand P0 mini-PRDs to build-ready depth.
-3. Scaffold app + auth + calendar MVP.
+Safari → Share → **Add to Home Screen**. Manifest at `/manifest.webmanifest`.
+
+## Status
+
+- ✅ Demo UI shell: Calendar / Tasks / Shop / Meals / Settings
+- ✅ Busy privacy projection + tests
+- ✅ SQL schema + RLS sketch
+- ⏳ Wire create/edit to Supabase (F01/F03)
+- ⏳ Realtime (F05), recurrence expand (F04)
