@@ -1,19 +1,19 @@
 # Master PRD — Household Calendar
 
-**Product codename:** Household Calendar (working title; rename later)  
+**Product name:** Duet  
 **Repo:** https://github.com/mildew2326/household-calendar  
 **Owner (orchestrator):** Hermes Agent  
 **Executor:** Grok Build  
-**Status:** Discovery / interview gate (v0.1)  
+**Status:** Interview gate partially closed — ready to deepen P0 mini-PRDs (v0.2)  
 **Last updated:** 2026-07-13  
 
 ---
 
 ## 1. Vision
 
-A shared household operating system for time: appointments, reminders, events, lists, and couple collaboration — optimized for **two iPhone users** first, with a **web-first** product that can be installed as a **PWA** and later wrapped as a native iOS app if needed.
+**Duet** is a shared household operating system for time: appointments, reminders, events, lists, shopping, and meals — optimized for **two iPhone users**, delivered as a **premium web PWA** (Add to Home Screen). It is the **primary system of record** so the household stops juggling many apps.
 
-Not “another Google Calendar clone.” Goal: the **default place both partners open** for household logistics, with reliability and feel that match or beat Cozi + TimeTree + Apple/Google strengths combined.
+Not “another Google Calendar clone.” Goal: the **default place both partners open**, with Fantastical-grade polish and Cozi-grade household coverage.
 
 ## 2. Primary users & jobs-to-be-done
 
@@ -46,25 +46,23 @@ Not “another Google Calendar clone.” Goal: the **default place both partners
 - Research + PRDs + repo scaffolding
 - Interview gates closed
 
-### Phase 1 — Web PWA MVP
-- Auth (couple household)
-- Shared calendar CRUD + views
-- Real-time sync
-- Push notifications (where supported)
-- Shared lists (todos + shopping)
-- Mobile-responsive UI that feels app-like on iPhone Safari
+### Phase 1 — Web PWA MVP (locked direction)
+- Auth: magic-link email; 2-adult household
+- Shared calendar CRUD + premium views (day/3-day/week/month/agenda)
+- Private events → partner sees Busy only
+- Real-time sync (Supabase)
+- In-app + email reminders (Web Push best-effort, not blocking)
+- Shared todos/chores + shopping lists + meal planner
+- Mobile-responsive UI, Fantastical-like polish, PWA install on iPhone
 
-### Phase 2 — iPhone polish
-- PWA install prompts, offline, better push path
-- Optional Capacitor/React Native shell for App Store + reliable APNs + widgets
+### Phase 2 — Polish & reliability
+- Offline cache, better PWA install UX, kitchen/wall mode
+- Optional native shell only if push/widgets become non-negotiable
 
 ### Phase 3 — Intelligence & federation
 - Natural language / voice
-- Google/iCloud import
+- Optional Google/iCloud read overlays
 - AI suggestions, OCR flyer import
-- Kitchen display mode
-
-**Decision pending (interview):** pure PWA vs commit early to Capacitor wrapper.
 
 ## 5. Proposed tech stack (subject to interview)
 

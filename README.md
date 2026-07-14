@@ -1,9 +1,9 @@
-# Household Calendar
+# Duet (household-calendar)
 
-Shared household calendar for couples (iPhone-first), web PWA delivery, orchestrated by Hermes + built by Grok Build.
+**Duet** — premium shared household calendar for couples (iPhone PWA), orchestrated by Hermes + built by Grok Build.
 
 **Repo:** https://github.com/mildew2326/household-calendar  
-**Status:** Discovery — competitive research complete; product interview open
+**Status:** Discovery complete for architecture gates; deepening mini-PRDs next
 
 ## Docs
 

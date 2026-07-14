@@ -82,4 +82,13 @@ Instructions: answer in chat (or edit this file). Prefer decisive choices; “un
 
 | ID | Decision | Choice | Date |
 |---|---|---|---|
-| | | | |
+| D1 | iPhone delivery v1 | Web + PWA only (Add to Home Screen); native shell deferred | 2026-07-13 |
+| D2 | System of record | Primary — household lives here | 2026-07-13 |
+| D3 | Private events | Allowed; partner sees Busy only | 2026-07-13 |
+| D4 | UI tone | Premium productivity (Fantastical-like) | 2026-07-13 |
+| D5 | MVP scope | Calendar + todos/chores + shopping + meal planner | 2026-07-13 |
+| D6 | Locked-phone push | Nice-to-have; in-app + email OK for v1 | 2026-07-13 |
+| D7 | Top pain | Too many apps; nothing is source of truth | 2026-07-13 |
+| D8 | Auth | Magic link email | 2026-07-13 |
+| D9 | Hosting | Managed cloud (Vercel + Supabase) | 2026-07-13 |
+| D10 | Brand name | **Duet** (Hermes pick — short, couple-forward, premium) | 2026-07-13 |
