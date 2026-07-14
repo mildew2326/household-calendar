@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { useNutritionStore } from "@/lib/nutrition/store";
-import { shiftDateISO, todayISO } from "@/lib/nutrition/math";
+import {
+  remainingMacros,
+  shiftDateISO,
+  todayISO,
+  type Macros,
+} from "@/lib/nutrition/math";
 import { MacroRings, RemainingBar } from "@/components/nutrition/MacroRings";
 import { FoodSearchPanel } from "@/components/nutrition/FoodSearchPanel";
 import { DiaryList } from "@/components/nutrition/DiaryList";
@@ -12,18 +17,51 @@ import { TargetsForm } from "@/components/nutrition/TargetsForm";
 
 type Tab = "diary" | "add" | "weight" | "trends" | "targets";
 
+/** Stable empty macros so selectors don't thrash. */
+const EMPTY: Macros = {
+  calories: 0,
+  protein: 0,
+  carbs: 0,
+  fat: 0,
+  fiber: 0,
+  sugar: 0,
+  sodium: 0,
+};
+
 export default function MacrosPage() {
   const [tab, setTab] = useState<Tab>("diary");
+
+  // Subscribe only to raw state slices (stable refs until store updates)
   const selectedDate = useNutritionStore((s) => s.selectedDate);
   const setSelectedDate = useNutritionStore((s) => s.setSelectedDate);
-  const totals = useNutritionStore((s) => s.dayTotals());
-  const target = useNutritionStore((s) => s.target());
-  const water = useNutritionStore((s) =>
-    s.water.find((w) => w.date === s.selectedDate)?.ml ?? 0
-  );
+  const log = useNutritionStore((s) => s.log);
+  const waterArr = useNutritionStore((s) => s.water);
+  const weights = useNutritionStore((s) => s.weights);
+  const profile = useNutritionStore((s) => s.profile);
   const addWater = useNutritionStore((s) => s.addWater);
   const copyDay = useNutritionStore((s) => s.copyDay);
-  const review = useNutritionStore((s) => s.weeklyReview());
+
+  // Derive via getState helpers only when inputs change — never inside zustand selector
+  const totals = useMemo(() => {
+    return useNutritionStore.getState().dayTotals(selectedDate);
+  }, [log, selectedDate]);
+
+  const target = useMemo(() => {
+    return useNutritionStore.getState().target();
+  }, [log, weights, profile]);
+
+  const water = useMemo(() => {
+    return waterArr.find((w) => w.date === selectedDate)?.ml ?? 0;
+  }, [waterArr, selectedDate]);
+
+  const review = useMemo(() => {
+    return useNutritionStore.getState().weeklyReview();
+  }, [log, weights, profile]);
+
+  const remaining = useMemo(
+    () => remainingMacros(target, totals),
+    [target, totals]
+  );
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "diary", label: "Diary" },
@@ -69,13 +107,16 @@ export default function MacrosPage() {
         </div>
       </div>
 
-      <MacroRings totals={totals} target={target} />
+      <MacroRings totals={totals.calories ? totals : totals || EMPTY} target={target} />
       <RemainingBar totals={totals} target={target} />
 
       <div className="card flex items-center justify-between gap-2 p-3">
         <div>
           <p className="text-[11px] font-semibold text-muted uppercase">Water</p>
           <p className="text-lg font-semibold">{water} ml</p>
+          <p className="text-[10px] text-muted">
+            left {Math.round(remaining.calories)} kcal
+          </p>
         </div>
         <div className="flex gap-2">
           {[250, 500].map((ml) => (
@@ -136,12 +177,7 @@ export default function MacrosPage() {
         </div>
       )}
 
-      {tab === "add" && (
-        <FoodSearchPanel
-          onLogged={() => setTab("diary")}
-        />
-      )}
-
+      {tab === "add" && <FoodSearchPanel onLogged={() => setTab("diary")} />}
       {tab === "weight" && <WeightPanel />}
       {tab === "trends" && <TrendsPanel />}
       {tab === "targets" && <TargetsForm />}

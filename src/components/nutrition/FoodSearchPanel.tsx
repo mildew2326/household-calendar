@@ -68,20 +68,35 @@ export function FoodSearchPanel({
 
       <div className="card max-h-56 overflow-y-auto divide-y divide-black/5">
         {results.map((f) => (
-          <button
+          <div
             key={f.id}
-            type="button"
+            role="button"
+            tabIndex={0}
             onClick={() => pick(f)}
-            className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-black/[0.03] ${
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                pick(f);
+              }
+            }}
+            className={`flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-black/[0.03] ${
               selected?.id === f.id ? "bg-accent/10" : ""
             }`}
           >
-            <button
-              type="button"
+            <span
+              role="button"
+              tabIndex={0}
               className="shrink-0 text-muted"
               onClick={(e) => {
                 e.stopPropagation();
                 toggleFavorite(f.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleFavorite(f.id);
+                }
               }}
               aria-label="Favorite"
             >
@@ -89,7 +104,7 @@ export function FoodSearchPanel({
                 size={16}
                 className={f.favorite ? "fill-amber-400 text-amber-400" : ""}
               />
-            </button>
+            </span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold">{f.name}</p>
               <p className="text-xs text-muted">
@@ -97,7 +112,7 @@ export function FoodSearchPanel({
                 {f.per.fat} · {f.servingLabel}
               </p>
             </div>
-          </button>
+          </div>
         ))}
         {!results.length && (
           <p className="px-3 py-4 text-sm text-muted">No matches</p>

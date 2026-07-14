@@ -1,16 +1,28 @@
 "use client";
 
+import { useMemo } from "react";
 import { useNutritionStore } from "@/lib/nutrition/store";
 import { MEAL_PERIODS, type MealPeriod } from "@/lib/nutrition/math";
 
 export function DiaryList() {
-  const entries = useNutritionStore((s) => s.dayEntries());
+  const log = useNutritionStore((s) => s.log);
+  const selectedDate = useNutritionStore((s) => s.selectedDate);
   const remove = useNutritionStore((s) => s.removeLogEntry);
 
-  const byPeriod = MEAL_PERIODS.map((p) => ({
-    ...p,
-    items: entries.filter((e) => e.period === p.id),
-  }));
+  const entries = useMemo(() => {
+    return log
+      .filter((e) => e.date === selectedDate)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [log, selectedDate]);
+
+  const byPeriod = useMemo(
+    () =>
+      MEAL_PERIODS.map((p) => ({
+        ...p,
+        items: entries.filter((e) => e.period === p.id),
+      })),
+    [entries]
+  );
 
   if (!entries.length) {
     return (

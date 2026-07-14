@@ -7,7 +7,12 @@ import { shiftDateISO, todayISO } from "@/lib/nutrition/math";
 export function WeightPanel() {
   const weights = useNutritionStore((s) => s.weights);
   const logWeight = useNutritionStore((s) => s.logWeight);
-  const latest = useNutritionStore((s) => s.latestWeightKg());
+
+  const latest = useMemo(() => {
+    const w = [...weights].sort((a, b) => b.date.localeCompare(a.date))[0];
+    return w?.kg ?? 80;
+  }, [weights]);
+
   const [kg, setKg] = useState(String(latest));
 
   const sorted = useMemo(
@@ -79,16 +84,36 @@ export function WeightPanel() {
 }
 
 export function TrendsPanel() {
-  const review = useNutritionStore((s) => s.weeklyReview());
-  const dayTotals = useNutritionStore((s) => s.dayTotals);
-  const target = useNutritionStore((s) => s.target());
-  const expenditure = useNutritionStore((s) => s.expenditure());
-  const staticTdee = useNutritionStore((s) => s.staticTdee());
+  const log = useNutritionStore((s) => s.log);
+  const weights = useNutritionStore((s) => s.weights);
+  const profile = useNutritionStore((s) => s.profile);
 
   const days = useMemo(() => {
     const t = todayISO();
     return Array.from({ length: 7 }, (_, i) => shiftDateISO(t, i - 6));
   }, []);
+
+  const review = useMemo(
+    () => useNutritionStore.getState().weeklyReview(),
+    [log, weights, profile]
+  );
+  const target = useMemo(
+    () => useNutritionStore.getState().target(),
+    [log, weights, profile]
+  );
+  const expenditure = useMemo(
+    () => useNutritionStore.getState().expenditure(),
+    [log, weights, profile]
+  );
+  const staticTdee = useMemo(
+    () => useNutritionStore.getState().staticTdee(),
+    [weights, profile]
+  );
+
+  const dayCals = useMemo(() => {
+    const st = useNutritionStore.getState();
+    return days.map((d) => ({ d, c: st.dayTotals(d).calories }));
+  }, [days, log]);
 
   return (
     <div className="space-y-3">
@@ -139,9 +164,11 @@ export function TrendsPanel() {
           Daily calories vs target ({target.calories})
         </p>
         <div className="space-y-1.5">
-          {days.map((d) => {
-            const c = dayTotals(d).calories;
-            const pct = Math.min(100, Math.round((c / target.calories) * 100));
+          {dayCals.map(({ d, c }) => {
+            const pct = Math.min(
+              100,
+              Math.round((c / Math.max(1, target.calories)) * 100)
+            );
             return (
               <div key={d} className="flex items-center gap-2 text-xs">
                 <span className="w-20 shrink-0 text-muted">{d.slice(5)}</span>

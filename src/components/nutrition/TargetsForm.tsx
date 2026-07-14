@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useNutritionStore } from "@/lib/nutrition/store";
 import type { ActivityLevel, GoalType, Sex } from "@/lib/nutrition/math";
 
@@ -9,8 +10,17 @@ const fieldClass =
 export function TargetsForm() {
   const profile = useNutritionStore((s) => s.profile);
   const setProfile = useNutritionStore((s) => s.setProfile);
-  const target = useNutritionStore((s) => s.target());
-  const expenditure = useNutritionStore((s) => s.expenditure());
+  const log = useNutritionStore((s) => s.log);
+  const weights = useNutritionStore((s) => s.weights);
+
+  const target = useMemo(
+    () => useNutritionStore.getState().target(),
+    [profile, log, weights]
+  );
+  const expenditure = useMemo(
+    () => useNutritionStore.getState().expenditure(),
+    [profile, log, weights]
+  );
 
   return (
     <div className="space-y-3">
