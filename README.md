@@ -48,6 +48,7 @@ Safari → Share → **Add to Home Screen**. Manifest at `/manifest.webmanifest`
 
 ## Status
 
+- ✅ Goals / Today planner (top 3, hour grid), multi-view calendar, family meal portions
 - ✅ Macro tracking (MacroFactor-class): diary, search, custom foods, rings, adaptive targets, weight, water, trends, meal→log
 
 - ✅ Demo UI shell: Calendar / Tasks / Shop / Meals / Settings
