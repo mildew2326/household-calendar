@@ -2,14 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, CheckSquare, ShoppingCart, UtensilsCrossed, Settings } from "lucide-react";
+import {
+  CalendarDays,
+  CheckSquare,
+  ShoppingCart,
+  UtensilsCrossed,
+  Settings,
+  PieChart,
+} from "lucide-react";
 
 const tabs = [
   { href: "/app", label: "Calendar", icon: CalendarDays },
+  { href: "/app/macros", label: "Macros", icon: PieChart },
   { href: "/app/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/app/shop", label: "Shop", icon: ShoppingCart },
   { href: "/app/meals", label: "Meals", icon: UtensilsCrossed },
-  { href: "/app/settings", label: "Settings", icon: Settings },
+  { href: "/app/settings", label: "More", icon: Settings },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

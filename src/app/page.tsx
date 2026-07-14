@@ -31,9 +31,9 @@ export default function HomePage() {
         </div>
         <ul className="mt-12 grid gap-3 text-sm text-muted sm:grid-cols-2">
           <li className="card p-4">Shared week/day views + Busy privacy</li>
+          <li className="card p-4">Macro tracker (diary, targets, weight)</li>
           <li className="card p-4">Todos & chores with assignees</li>
-          <li className="card p-4">Shopping list that syncs in-store</li>
-          <li className="card p-4">Meal planner → shopping ingredients</li>
+          <li className="card p-4">Shopping list + meal planner</li>
         </ul>
         <p className="mt-10 text-xs text-muted">
           Demo mode works without Supabase. Add env keys to enable live auth &

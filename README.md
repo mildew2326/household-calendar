@@ -48,6 +48,8 @@ Safari → Share → **Add to Home Screen**. Manifest at `/manifest.webmanifest`
 
 ## Status
 
+- ✅ Macro tracking (MacroFactor-class): diary, search, custom foods, rings, adaptive targets, weight, water, trends, meal→log
+
 - ✅ Demo UI shell: Calendar / Tasks / Shop / Meals / Settings
 - ✅ Busy privacy projection + tests
 - ✅ SQL schema + RLS sketch

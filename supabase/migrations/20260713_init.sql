@@ -234,8 +234,71 @@ create policy meals_all on public.meals for all using (
   meal_plan_id in (select id from public.meal_plans where household_id = public.my_household_id())
 );
 
+create table if not exists public.foods (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid references public.households (id) on delete cascade,
+  name text not null,
+  brand text,
+  serving_grams numeric not null,
+  serving_label text not null,
+  calories numeric not null,
+  protein numeric not null,
+  carbs numeric not null,
+  fat numeric not null,
+  fiber numeric default 0,
+  sugar numeric default 0,
+  sodium numeric default 0,
+  barcode text,
+  is_custom boolean default true,
+  created_by uuid references public.profiles (id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.food_log (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  date date not null,
+  period text not null check (period in ('breakfast','lunch','dinner','snack')),
+  food_id text,
+  food_name text not null,
+  grams numeric not null,
+  calories numeric not null,
+  protein numeric not null,
+  carbs numeric not null,
+  fat numeric not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.weight_log (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  date date not null,
+  kg numeric not null,
+  note text,
+  unique (user_id, date)
+);
+
+create table if not exists public.water_log (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  date date not null,
+  ml numeric not null default 0,
+  primary key (user_id, date)
+);
+
+create table if not exists public.nutrition_profiles (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  sex text,
+  age int,
+  height_cm numeric,
+  activity text,
+  goal text,
+  weekly_change_kg numeric
+);
+
 -- Realtime
 alter publication supabase_realtime add table public.events;
 alter publication supabase_realtime add table public.todos;
 alter publication supabase_realtime add table public.shopping_items;
 alter publication supabase_realtime add table public.meals;
+alter publication supabase_realtime add table public.food_log;

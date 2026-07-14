@@ -23,6 +23,14 @@ export default function SettingsPage() {
         </p>
       </section>
       <section className="card space-y-2 p-4 text-sm">
+        <h3 className="font-semibold">Macros</h3>
+        <p className="text-muted">
+          Food diary, adaptive targets, weight, and water live under the Macros
+          tab. Data persists in this browser (local). Supabase tables ready when
+          cloud is configured.
+        </p>
+      </section>
+      <section className="card space-y-2 p-4 text-sm">
         <h3 className="font-semibold">iPhone install</h3>
         <p className="text-muted">
           Safari → Share → Add to Home Screen for standalone Duet.
