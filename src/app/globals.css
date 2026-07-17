@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f6f4ef;
-  --ink: #0c1222;
-  --muted: #5c6b84;
-  --accent: #0e7c66;
-  --accent-2: #1d4ed8;
+  --paper: #f3f1eb;
+  --ink: #101828;
+  --muted: #667085;
+  --accent: #0f766e;
+  --accent-2: #2563eb;
   --card: #ffffff;
-  --line: rgba(12, 18, 34, 0.08);
+  --line: rgba(16, 24, 40, 0.08);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -23,20 +23,24 @@
 
 html,
 body {
-  background: var(--paper);
+  background:
+    radial-gradient(900px 420px at 10% -10%, rgba(15, 118, 110, 0.08), transparent 50%),
+    radial-gradient(700px 380px at 100% 0%, rgba(37, 99, 235, 0.06), transparent 45%),
+    var(--paper);
   color: var(--ink);
   min-height: 100%;
 }
 
 body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 18px;
-  box-shadow: 0 12px 40px rgba(12, 18, 34, 0.05);
+  border-radius: 22px;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.04);
 }
 
 .busy-block {
@@ -49,4 +53,58 @@ body {
   );
   color: var(--muted);
   font-style: italic;
+}
+
+/* utility used across polished surfaces */
+.chip {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.chip-solid {
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.field {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(16, 24, 40, 0.1);
+  background: #fff;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.legend i {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
 }

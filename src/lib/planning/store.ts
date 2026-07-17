@@ -5,10 +5,13 @@ import { persist } from "zustand/middleware";
 import {
   buildShoppingFromMeals,
   isoDate,
+  parseNaturalLanguage,
   planBlocksFromGoal,
+  type ActivityItem,
   type CalendarView,
   type DailyItem,
   type DailyPlan,
+  type EventComment,
   type Goal,
   type HouseholdEvent,
   type Member,
@@ -76,6 +79,20 @@ function seedEvents(): HouseholdEvent[] {
       memberId: MEMBER_A,
       kind: "personal",
       priority: 4,
+      recurrence: "WEEKLY",
+      reminderMinutes: [720],
+    },
+    {
+      id: "ev6",
+      title: "Partner focus block",
+      ...at(0, 14, 1),
+      allDay: false,
+      memberId: MEMBER_B,
+      kind: "personal",
+      priority: 2,
+      location: "Home office",
+      notes: "Do not schedule over this",
+      reminderMinutes: [30, 60],
     },
   ];
 }
@@ -96,15 +113,21 @@ interface PlanningState {
   calendarView: CalendarView;
   selectedDate: string;
   groupColor: string;
+  activity: ActivityItem[];
+  activeMemberId: string;
 
   setCalendarView: (v: CalendarView) => void;
+  setActiveMemberId: (id: string) => void;
   setSelectedDate: (d: string) => void;
   setGroupColor: (c: string) => void;
   updateMember: (id: string, patch: Partial<Member>) => void;
 
-  addEvent: (e: Omit<HouseholdEvent, "id">) => void;
+  addEvent: (e: Omit<HouseholdEvent, "id">) => string;
   updateEvent: (id: string, patch: Partial<HouseholdEvent>) => void;
   removeEvent: (id: string) => void;
+  addEventFromNL: (text: string) => string | null;
+  addEventComment: (eventId: string, body: string) => void;
+  pushActivity: (message: string, actorId?: string) => void;
 
   addGoal: (g: Omit<Goal, "id">) => void;
   updateGoal: (id: string, patch: Partial<Goal>) => void;
@@ -226,13 +249,37 @@ export const usePlanningStore = create<PlanningState>()(
       dailyPlans: {},
       meals: defaultMeals(),
       shoppingExtra: [],
-      calendarView: "threeDay",
+      calendarView: "week",
       selectedDate: isoDate(),
       groupColor: "#7c3aed",
+      activity: [
+        {
+          id: "act0",
+          at: new Date().toISOString(),
+          actorId: MEMBER_B,
+          message: "Partner added Dentist",
+        },
+      ],
+      activeMemberId: MEMBER_A,
 
       setCalendarView: (v) => set({ calendarView: v }),
       setSelectedDate: (d) => set({ selectedDate: d }),
       setGroupColor: (c) => set({ groupColor: c }),
+      setActiveMemberId: (id) => set({ activeMemberId: id }),
+      pushActivity: (message, actorId) => {
+        const actor = actorId ?? get().activeMemberId;
+        set({
+          activity: [
+            {
+              id: crypto.randomUUID(),
+              at: new Date().toISOString(),
+              actorId: actor,
+              message,
+            },
+            ...get().activity,
+          ].slice(0, 50),
+        });
+      },
       updateMember: (id, patch) =>
         set({
           members: get().members.map((m) =>
@@ -240,18 +287,88 @@ export const usePlanningStore = create<PlanningState>()(
           ),
         }),
 
-      addEvent: (e) =>
+      addEvent: (e) => {
+        const id = crypto.randomUUID();
+        const actor = get().activeMemberId;
+        const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
         set({
-          events: [...get().events, { ...e, id: crypto.randomUUID() }],
-        }),
-      updateEvent: (id, patch) =>
+          events: [
+            ...get().events,
+            {
+              reminderMinutes: [60, 1440],
+              comments: [],
+              ...e,
+              id,
+            },
+          ],
+        });
+        get().pushActivity(`${name} added ${e.title}`, actor);
+        return id;
+      },
+      updateEvent: (id, patch) => {
+        const prev = get().events.find((e) => e.id === id);
         set({
           events: get().events.map((e) =>
             e.id === id ? { ...e, ...patch } : e
           ),
-        }),
-      removeEvent: (id) =>
-        set({ events: get().events.filter((e) => e.id !== id) }),
+        });
+        if (prev) {
+          const actor = get().activeMemberId;
+          const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
+          get().pushActivity(`${name} updated ${patch.title ?? prev.title}`, actor);
+        }
+      },
+      removeEvent: (id) => {
+        const prev = get().events.find((e) => e.id === id);
+        set({
+          events: get().events.map((e) =>
+            e.id === id ? { ...e, deleted: true } : e
+          ),
+        });
+        if (prev) {
+          const actor = get().activeMemberId;
+          const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
+          get().pushActivity(`${name} removed ${prev.title}`, actor);
+        }
+      },
+      addEventFromNL: (text) => {
+        const parsed = parseNaturalLanguage(text);
+        if (!parsed.title) return null;
+        return get().addEvent({
+          title: parsed.title,
+          startsAt: parsed.startsAt!,
+          endsAt: parsed.endsAt!,
+          allDay: !!parsed.allDay,
+          memberId: parsed.memberId ?? null,
+          kind: parsed.kind ?? "group",
+          priority: (parsed.priority as Priority) ?? 3,
+          recurrence: parsed.recurrence ?? null,
+          reminderMinutes: parsed.reminderMinutes ?? [60, 1440],
+          notes: "",
+          location: "",
+          comments: [],
+        });
+      },
+      addEventComment: (eventId, body) => {
+        const actor = get().activeMemberId;
+        const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
+        const comment: EventComment = {
+          id: crypto.randomUUID(),
+          authorId: actor,
+          body: body.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        if (!comment.body) return;
+        set({
+          events: get().events.map((e) =>
+            e.id === eventId
+              ? { ...e, comments: [...(e.comments ?? []), comment] }
+              : e
+          ),
+        });
+        const title = get().events.find((e) => e.id === eventId)?.title ?? "event";
+        get().pushActivity(`${name} commented on ${title}`, actor);
+      },
 
       addGoal: (g) =>
         set({ goals: [...get().goals, { ...g, id: crypto.randomUUID() }] }),
@@ -495,7 +612,7 @@ export const usePlanningStore = create<PlanningState>()(
 
       shoppingLines: () => buildShoppingFromMeals(get().meals, get().members),
     }),
-    { name: "duet-planning-v1" }
+    { name: "duet-planning-v2" }
   )
 );
 
