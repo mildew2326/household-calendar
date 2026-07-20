@@ -6,7 +6,6 @@ import { format, parseISO } from "date-fns";
 import { usePlanningStore } from "@/lib/planning/store";
 import {
   expandEvents,
-  eventColor,
   isoDate,
   top3Items,
   upcomingReminders,
@@ -22,7 +21,6 @@ export default function TodayHomePage() {
   const setSelectedDate = usePlanningStore((s) => s.setSelectedDate);
   const events = usePlanningStore((s) => s.events);
   const members = usePlanningStore((s) => s.members);
-  const groupColor = usePlanningStore((s) => s.groupColor);
   const dailyPlans = usePlanningStore((s) => s.dailyPlans);
   const goals = usePlanningStore((s) => s.goals);
   const seedDayFromCalendar = usePlanningStore((s) => s.seedDayFromCalendar);

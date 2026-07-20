@@ -203,6 +203,20 @@ interface PlanningState {
     people: number;
   };
   shoppingLines: () => ReturnType<typeof buildShoppingFromMeals>;
+
+  /** Replace shared slices from Firestore snapshot (device prefs kept). */
+  applyCloudSnapshot: (remote: {
+    members: Member[];
+    events: HouseholdEvent[];
+    goals: Goal[];
+    dailyPlans: Record<string, DailyPlan>;
+    meals: PlannedMeal[];
+    tasks: HouseholdTask[];
+    shoppingExtra: PlanningState["shoppingExtra"];
+    groupColor: string;
+    activity: ActivityItem[];
+    calendarView?: CalendarView;
+  }) => void;
 }
 
 const defaultMeals = (): PlannedMeal[] => {
@@ -1052,6 +1066,23 @@ export const usePlanningStore = create<PlanningState>()(
       },
 
       shoppingLines: () => buildShoppingFromMeals(get().meals, get().members),
+
+      applyCloudSnapshot: (remote) => {
+        set({
+          members: remote.members ?? get().members,
+          events: remote.events ?? [],
+          goals: remote.goals ?? [],
+          dailyPlans: remote.dailyPlans ?? {},
+          meals: remote.meals ?? [],
+          tasks: remote.tasks ?? [],
+          shoppingExtra: remote.shoppingExtra ?? [],
+          groupColor: remote.groupColor ?? get().groupColor,
+          activity: remote.activity ?? [],
+          ...(remote.calendarView
+            ? { calendarView: remote.calendarView }
+            : {}),
+        });
+      },
     }),
     { name: "duet-planning-v3" }
   )

@@ -1,0 +1,10 @@
+rules_version = '2';
+// Couple prototype — open access to household docs.
+// Before any public deploy: require auth + allowlist emails.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /households/{householdId} {
+      allow read, write: if true;
+    }
+  }
+}

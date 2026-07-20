@@ -12,6 +12,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { usePlanningStore } from "@/lib/planning/store";
 import { upcomingReminders } from "@/lib/planning/types";
+import { CloudSyncProvider } from "@/components/sync/CloudSyncProvider";
+import { SyncBadge } from "@/components/sync/SyncBadge";
 
 const tabs = [
   { href: "/app", label: "Today", icon: Sun, match: (p: string) => p === "/app" || p.startsWith("/app/today") },
@@ -63,6 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
+    <CloudSyncProvider>
     <div className="mx-auto flex min-h-screen max-w-lg flex-col md:max-w-2xl">
       <header className="sticky top-0 z-20 border-b border-black/5 bg-[rgba(246,244,239,0.9)] px-4 pb-3 pt-4 backdrop-blur-md">
         <div className="flex items-center justify-between gap-3">
@@ -75,6 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <SyncBadge />
             <div className="flex rounded-full border border-black/8 bg-white p-0.5">
               {members.map((m) => (
                 <button
@@ -192,5 +196,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </ul>
       </nav>
     </div>
+    </CloudSyncProvider>
   );
 }
