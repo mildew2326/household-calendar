@@ -47,13 +47,21 @@ export default function GoalsPage() {
   }, [goals]);
 
   function create() {
-    if (!title.trim()) return;
+    const t = title.trim();
+    if (!t) {
+      setMsg("Type a goal name, then tap Add goal.");
+      return;
+    }
+    const owner =
+      members.find((m) => m.id)?.id ||
+      members[0]?.id ||
+      "m-you";
     addGoal({
-      title: title.trim(),
+      title: t,
       description: "",
       status: "active",
       priority: 2,
-      memberIds: [members[0]?.id].filter(Boolean) as string[],
+      memberIds: [owner],
       preferredDays: [1, 3, 5],
       preferredStartHour: 18,
       sessionMinutes: 60,
@@ -63,47 +71,58 @@ export default function GoalsPage() {
     });
     setTitle("");
     setDeadline("");
+    setMsg(`Added “${t}”. It should appear below and sync when Live.`);
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-4">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Goals</h2>
         <p className="text-sm text-muted">
-          Deadlines · sections · progress % · triage time onto the calendar
+          Deadlines · sections · progress · triage onto calendar
         </p>
       </div>
 
       {msg && (
-        <p className="rounded-xl bg-accent/10 px-3 py-2 text-sm">{msg}</p>
+        <p className="rounded-xl bg-accent/10 px-3 py-2 text-sm font-medium">
+          {msg}
+        </p>
       )}
 
-      <div className="card space-y-2 p-3">
-        <div className="flex gap-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="New goal / project"
-            className="flex-1 rounded-xl border border-black/10 px-3 py-2 text-sm"
-            onKeyDown={(e) => e.key === "Enter" && create()}
-          />
-          <button
-            type="button"
-            onClick={create}
-            className="rounded-full bg-ink px-4 text-sm font-semibold text-white"
-          >
-            Add
-          </button>
-        </div>
-        <label className="flex items-center gap-2 text-xs font-semibold text-muted">
-          Deadline
+      <div className="card space-y-3 p-4">
+        <p className="text-xs font-bold tracking-wide text-muted uppercase">
+          Add a goal
+        </p>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g. Home office setup"
+          enterKeyHint="done"
+          autoComplete="off"
+          className="w-full rounded-2xl border border-black/10 px-4 py-3.5 text-base"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              create();
+            }
+          }}
+        />
+        <label className="flex flex-col gap-1 text-xs font-semibold text-muted">
+          Deadline (optional)
           <input
             type="date"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
-            className="rounded-lg border border-black/10 px-2 py-1 text-ink"
+            className="w-full rounded-xl border border-black/10 px-3 py-3 text-base text-ink"
           />
         </label>
+        <button
+          type="button"
+          onClick={create}
+          className="min-h-12 w-full rounded-full bg-ink py-3.5 text-base font-semibold text-white active:opacity-90"
+        >
+          Add goal
+        </button>
       </div>
 
       <section className="card p-4">
@@ -111,6 +130,9 @@ export default function GoalsPage() {
         <p className="mb-2 text-xs text-muted">
           Sorted by deadline pressure, remaining work, and priority (1 = highest).
         </p>
+        {active.length === 0 ? (
+          <p className="text-sm text-muted">No active goals yet — add one above.</p>
+        ) : (
         <ol className="space-y-1 text-sm">
           {active.map((g, i) => {
             const days = daysUntilDeadline(g.targetDate);
@@ -125,7 +147,7 @@ export default function GoalsPage() {
                   {i + 1}. {g.title}
                 </span>
                 <span className="text-xs text-muted">
-                  {pct}% · {Math.round(rem / 60 * 10) / 10}h left
+                  {pct}% · {Math.round((rem / 60) * 10) / 10}h left
                   {days === null
                     ? ""
                     : days < 0
@@ -136,6 +158,7 @@ export default function GoalsPage() {
             );
           })}
         </ol>
+        )}
       </section>
 
       <ul className="space-y-3">

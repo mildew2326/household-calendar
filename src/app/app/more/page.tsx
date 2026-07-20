@@ -35,11 +35,15 @@ export default function MorePage() {
       </section>
 
       <nav className="space-y-2">
-        <MoreLink href="/app/goals" title="Goals & projects" desc="Schedule plans from big outcomes" />
+        <MoreLink
+          href="/app/goals"
+          title="Goals & projects"
+          desc="Add goals, deadlines, sections — tap here on iPhone"
+          emphasize
+        />
         <MoreLink href="/app/today" title="Full day planner" desc="Hour grid, skip, reschedule" />
         <MoreLink href="/app/macros" title="Macros lab" desc="Parked under labs — advanced nutrition diary" />
-        <MoreLink href="/app/settings" title="Settings" desc="Mode, privacy, install tips" />
-        <MoreLink href="/login" title="Magic link login" desc="Cloud auth when Supabase is configured" />
+        <MoreLink href="/app/settings" title="Settings" desc="Cloud sync status, privacy, install tips" />
       </nav>
 
       <section className="card p-4">
@@ -60,13 +64,20 @@ function MoreLink({
   href,
   title,
   desc,
+  emphasize,
 }: {
   href: string;
   title: string;
   desc: string;
+  emphasize?: boolean;
 }) {
   return (
-    <Link href={href} className="card block px-4 py-3">
+    <Link
+      href={href}
+      className={`card block px-4 py-4 ${
+        emphasize ? "border-accent/30 ring-1 ring-accent/20" : ""
+      }`}
+    >
       <p className="font-semibold">{title}</p>
       <p className="text-sm text-muted">{desc}</p>
     </Link>

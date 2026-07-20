@@ -19,9 +19,27 @@ Duet ships a Firestore adapter. Optional GCS/Firebase Storage can be added for m
 
 ## 2. Register a Web app
 
-1. Project overview → **Web** (`</>`)
+1. Project overview → **Web** (`</>`) — **not** the iOS SDK GitHub page
 2. App nickname `Duet PWA`
-3. Copy the `firebaseConfig` values
+3. Copy the `firebaseConfig` **object** from the console (fields below)
+4. Optional later: register **iOS** app with Bundle ID `com.carl.duet` (for a native shell). That downloads `GoogleService-Info.plist`, which is **not** used by the current Next.js web app.
+
+### What the web config looks like (paste these values)
+
+```js
+const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};
+```
+
+Map into `.env.local` as `NEXT_PUBLIC_FIREBASE_*` (see §5).
+
+**Not the web config:** https://github.com/firebase/firebase-ios-sdk — that is Apple’s open-source SDK source, not your project keys.
 
 ## 3. Enable Firestore
 
