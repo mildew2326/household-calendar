@@ -3,12 +3,13 @@
 import { useMemo } from "react";
 import type { DailyItem } from "@/lib/planning/types";
 
-const HOUR_PX = 56; // pixels per hour — visual scale
+/** px per minute — 60m = 48px, 120m = 96px */
+export const PX_PER_MIN = 0.9;
 
 export type TimelineBlock = {
   id: string;
   title: string;
-  startMin: number; // minutes from midnight
+  startMin: number;
   durationMin: number;
   done?: boolean;
   skipped?: boolean;
@@ -17,50 +18,55 @@ export type TimelineBlock = {
   soft?: boolean;
   color?: string;
   subtitle?: string;
+  editable?: boolean;
 };
 
 export function itemsToBlocks(items: DailyItem[]): TimelineBlock[] {
   return items
     .filter((i) => !i.skipped)
-    .map((i) => ({
-      id: i.id,
-      title: i.title,
-      startMin: i.startHour * 60 + (i.startMinute || 0),
-      durationMin: Math.max(15, i.durationMinutes || 30),
-      done: i.done,
-      skipped: i.skipped,
-      isTop3: i.isTop3,
-      top3Rank: i.top3Rank,
-      soft: i.notes?.includes("soft") || false,
-      subtitle: `${i.durationMinutes}m · ${i.sourceType}`,
-    }));
+    .map((i) => {
+      const durationMin = Math.max(15, Number(i.durationMinutes) || 30);
+      const startMin =
+        (Number(i.startHour) || 0) * 60 + (Number(i.startMinute) || 0);
+      return {
+        id: i.id,
+        title: i.title,
+        startMin,
+        durationMin,
+        done: i.done,
+        skipped: i.skipped,
+        isTop3: i.isTop3,
+        top3Rank: i.top3Rank,
+        soft: !!i.notes?.includes("soft"),
+        editable: true,
+        subtitle: `${fmt(startMin)}–${fmt(startMin + durationMin)} · ${durationMin}m`,
+      };
+    });
 }
 
 type Props = {
-  /** first hour shown (inclusive) */
   startHour?: number;
-  /** last hour shown (exclusive), e.g. 21 = up to 21:00 */
   endHour?: number;
   blocks: TimelineBlock[];
-  /** optional: move item by new start hour */
   onMoveStartHour?: (id: string, hour: number, minute: number) => void;
   hoursForMove?: number[];
 };
 
 /**
- * Proportional day timeline: a 120m block spans 2 hour rows, not one chip.
+ * Classic calendar day column: each block's height = duration.
+ * 120 minutes occupies exactly two hour rows.
  */
 export function HourTimeline({
   startHour = 6,
-  endHour = 21,
+  endHour = 22,
   blocks,
   onMoveStartHour,
   hoursForMove,
 }: Props) {
   const rangeStart = startHour * 60;
   const rangeEnd = endHour * 60;
-  const totalMin = Math.max(60, rangeEnd - rangeStart);
-  const height = (totalMin / 60) * HOUR_PX;
+  const totalMin = rangeEnd - rangeStart;
+  const heightPx = totalMin * PX_PER_MIN;
   const hours = Array.from(
     { length: endHour - startHour },
     (_, i) => startHour + i
@@ -69,85 +75,87 @@ export function HourTimeline({
     hoursForMove ??
     Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
-  // layout columns for overlaps (simple greedy)
-  const laidOut = useMemo(() => layoutColumns(blocks, rangeStart, rangeEnd), [
-    blocks,
-    rangeStart,
-    rangeEnd,
-  ]);
+  const laid = useMemo(
+    () => layoutDay(blocks, rangeStart, rangeEnd),
+    [blocks, rangeStart, rangeEnd]
+  );
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-black/8 bg-white">
-      {/* hour rails */}
-      <div className="relative" style={{ height }}>
-        {hours.map((h, idx) => (
-          <div
-            key={h}
-            className="absolute left-0 right-0 border-t border-dashed border-black/8"
-            style={{ top: idx * HOUR_PX }}
-          >
-            <span className="absolute left-2 top-1 text-[10px] font-semibold text-muted">
-              {String(h).padStart(2, "0")}:00
-            </span>
-            {/* half-hour tick */}
-            <div
-              className="absolute left-12 right-2 border-t border-dotted border-black/5"
-              style={{ top: HOUR_PX / 2 }}
-            />
-          </div>
-        ))}
-        {/* end line */}
-        <div
-          className="absolute left-0 right-0 border-t border-black/10"
-          style={{ top: height - 1 }}
-        />
+    <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm">
+      <div className="flex border-b border-black/5 bg-paper/80 px-3 py-2 text-[11px] font-semibold text-muted">
+        <span className="w-14">Time</span>
+        <span className="flex-1">Schedule (height = duration)</span>
+      </div>
 
-        {/* blocks */}
-        <div className="absolute bottom-0 left-12 right-2 top-0">
-          {laidOut.map((b) => {
-            const top =
-              ((Math.max(b.visStart, rangeStart) - rangeStart) / 60) * HOUR_PX;
-            const hPx = Math.max(
-              22,
-              ((b.visEnd - b.visStart) / 60) * HOUR_PX - 3
-            );
-            const widthPct = 100 / b.colCount;
-            const leftPct = b.col * widthPct;
-            const startsBefore = b.startMin < rangeStart;
-            const endsAfter = b.startMin + b.durationMin > rangeEnd;
+      <div className="relative flex" style={{ height: heightPx }}>
+        {/* time gutter */}
+        <div className="relative w-14 shrink-0 border-r border-black/8 bg-[#faf9f6]">
+          {hours.map((h, idx) => (
+            <div
+              key={h}
+              className="absolute right-1 text-[11px] font-semibold tabular-nums text-muted"
+              style={{ top: idx * 60 * PX_PER_MIN - 1 }}
+            >
+              {String(h).padStart(2, "0")}:00
+            </div>
+          ))}
+        </div>
+
+        {/* grid + events */}
+        <div className="relative min-w-0 flex-1">
+          {/* hour lines */}
+          {hours.map((h, idx) => (
+            <div
+              key={h}
+              className="pointer-events-none absolute left-0 right-0 border-t border-black/10"
+              style={{ top: idx * 60 * PX_PER_MIN, height: 60 * PX_PER_MIN }}
+            >
+              <div
+                className="absolute left-0 right-0 border-t border-dotted border-black/5"
+                style={{ top: 30 * PX_PER_MIN }}
+              />
+            </div>
+          ))}
+
+          {/* event layer */}
+          {laid.map((b) => {
+            const top = (b.visStart - rangeStart) * PX_PER_MIN;
+            const hPx = Math.max(18, (b.visEnd - b.visStart) * PX_PER_MIN - 2);
+            const colW = 100 / b.colCount;
+            const left = b.col * colW;
+            const endLabel = fmt(b.startMin + b.durationMin);
 
             return (
               <div
                 key={b.id}
-                className={`absolute overflow-hidden rounded-xl border px-2 py-1 shadow-sm ${
-                  b.done
-                    ? "border-accent/30 bg-accent/15"
-                    : b.soft
-                      ? "border-dashed border-black/15 bg-slate-100/80"
-                      : "border-black/8 bg-paper"
-                }`}
+                className="absolute z-10 box-border overflow-hidden rounded-lg border border-black/10 px-2 py-1 shadow-sm"
                 style={{
-                  top,
+                  top: top + 1,
                   height: hPx,
-                  left: `calc(${leftPct}% + 2px)`,
-                  width: `calc(${widthPct}% - 4px)`,
-                  opacity: b.soft ? 0.55 : 1,
-                  borderLeftWidth: 4,
-                  borderLeftColor: b.color || (b.isTop3 ? "#0f766e" : "#1d4ed8"),
+                  left: `calc(${left}% + 3px)`,
+                  width: `calc(${colW}% - 6px)`,
+                  background: b.done
+                    ? "rgba(15,118,110,0.14)"
+                    : b.soft
+                      ? "rgba(148,163,184,0.25)"
+                      : "rgba(29,78,216,0.10)",
+                  opacity: b.soft ? 0.72 : 1,
+                  borderLeft: `4px solid ${
+                    b.color || (b.isTop3 ? "#0f766e" : "#1d4ed8")
+                  }`,
                 }}
-                title={`${fmt(b.startMin)}–${fmt(b.startMin + b.durationMin)} · ${b.durationMin}m`}
               >
-                <div className="flex h-full min-h-0 flex-col">
+                <div className="flex h-full flex-col">
                   <div className="flex items-start justify-between gap-1">
                     <p
-                      className={`text-[11px] font-semibold leading-tight ${
+                      className={`text-[12px] font-semibold leading-snug ${
                         b.done ? "text-muted line-through" : "text-ink"
                       }`}
                     >
                       {b.isTop3 ? `★${b.top3Rank} ` : ""}
                       {b.title}
                     </p>
-                    {onMoveStartHour && (
+                    {onMoveStartHour && b.editable && (
                       <select
                         value={Math.floor(b.startMin / 60)}
                         onChange={(e) =>
@@ -157,8 +165,8 @@ export function HourTimeline({
                             b.startMin % 60
                           )
                         }
-                        className="max-w-[4.2rem] shrink-0 rounded border border-black/10 bg-white/90 text-[9px]"
-                        onClick={(e) => e.stopPropagation()}
+                        className="max-w-[3.6rem] shrink-0 rounded border border-black/10 bg-white text-[10px]"
+                        onClick={(ev) => ev.stopPropagation()}
                       >
                         {moveHours.map((hh) => (
                           <option key={hh} value={hh}>
@@ -168,16 +176,16 @@ export function HourTimeline({
                       </select>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[10px] font-medium text-muted">
-                    {fmt(b.startMin)}–{fmt(b.startMin + b.durationMin)}
-                    {startsBefore || endsAfter ? " · clipped" : ""}
+                  <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-muted">
+                    {fmt(b.startMin)} – {endLabel}
                     {b.durationMin >= 60
-                      ? ` · ${Math.round((b.durationMin / 60) * 10) / 10}h`
+                      ? ` · ${formatDuration(b.durationMin)}`
                       : ` · ${b.durationMin}m`}
                   </p>
-                  {hPx > 48 && b.subtitle && (
-                    <p className="mt-auto truncate text-[10px] text-muted">
-                      {b.subtitle}
+                  {hPx >= 56 && (
+                    <p className="mt-auto text-[10px] text-muted">
+                      Spans {Math.ceil(b.durationMin / 60)} hour row
+                      {b.durationMin > 60 ? "s" : ""}
                     </p>
                   )}
                 </div>
@@ -186,11 +194,19 @@ export function HourTimeline({
           })}
         </div>
       </div>
-      <div className="border-t border-black/5 px-3 py-1.5 text-[10px] text-muted">
-        Blocks scale to duration — e.g. 120m spans two hour rows.
+
+      <div className="border-t border-black/5 px-3 py-2 text-[10px] text-muted">
+        Chronological day column — block height matches length (120m = 2 full
+        hours).
       </div>
     </div>
   );
+}
+
+function formatDuration(m: number) {
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r ? `${h}h ${r}m` : `${h}h`;
 }
 
 function fmt(min: number) {
@@ -207,36 +223,46 @@ type Laid = TimelineBlock & {
   colCount: number;
 };
 
-function layoutColumns(
+function layoutDay(
   blocks: TimelineBlock[],
   rangeStart: number,
   rangeEnd: number
 ): Laid[] {
   const clipped = blocks
     .map((b) => {
-      const end = b.startMin + b.durationMin;
-      const visStart = Math.max(b.startMin, rangeStart);
-      const visEnd = Math.min(end, rangeEnd);
-      return { ...b, visStart, visEnd };
+      const dur = Math.max(15, b.durationMin || 30);
+      const start = b.startMin;
+      const end = start + dur;
+      return {
+        ...b,
+        durationMin: dur,
+        startMin: start,
+        visStart: Math.max(start, rangeStart),
+        visEnd: Math.min(end, rangeEnd),
+      };
     })
     .filter((b) => b.visEnd > b.visStart)
     .sort((a, b) => a.visStart - b.visStart || b.durationMin - a.durationMin);
 
-  // assign columns
+  // column packing for true overlaps only
   const colEnds: number[] = [];
   const withCol: (typeof clipped[0] & { col: number })[] = [];
+
   for (const b of clipped) {
-    let col = colEnds.findIndex((end) => end <= b.visStart);
-    if (col === -1) {
-      col = colEnds.length;
-      colEnds.push(b.visEnd);
-    } else {
-      colEnds[col] = b.visEnd;
+    let col = 0;
+    while (col < colEnds.length && colEnds[col] > b.visStart) col++;
+    if (col === colEnds.length) colEnds.push(b.visEnd);
+    else colEnds[col] = b.visEnd;
+    // reset finished columns
+    for (let c = 0; c < colEnds.length; c++) {
+      if (colEnds[c] <= b.visStart) {
+        /* free */
+      }
     }
     withCol.push({ ...b, col });
   }
 
-  // cluster overlapping groups for colCount
+  // recompute colCount per overlap cluster
   const result: Laid[] = [];
   let i = 0;
   while (i < withCol.length) {
@@ -248,22 +274,8 @@ function layoutColumns(
     }
     const cluster = withCol.slice(i, j);
     const colCount = Math.max(1, ...cluster.map((c) => c.col + 1));
-    for (const c of cluster) {
-      result.push({ ...c, colCount });
-    }
+    for (const c of cluster) result.push({ ...c, colCount });
     i = j;
   }
   return result;
-}
-
-/** Compact duration editor used under checklist */
-export function DurationHint({ minutes }: { minutes: number }) {
-  if (minutes < 60) return <span>{minutes}m</span>;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return (
-    <span>
-      {h}h{m ? ` ${m}m` : ""}
-    </span>
-  );
 }

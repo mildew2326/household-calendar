@@ -168,7 +168,16 @@ interface PlanningState {
   removeMeal: (id: string) => void;
 
   ensureDailyPlan: (date: string) => void;
-  seedDayFromCalendar: (date: string) => void;
+  /**
+   * Pull calendar events + triage goals into the day plan.
+   * Requires a focus window; goals are packed into free time with real durations
+   * (never all dumped into the same start hour).
+   */
+  seedDayFromCalendar: (
+    date: string,
+    windowStartHour?: number,
+    windowEndHour?: number
+  ) => number;
   upsertDailyItem: (date: string, item: DailyItem) => void;
   removeDailyItem: (date: string, itemId: string) => void;
   setTop3: (date: string, orderedIds: string[]) => void;
@@ -793,68 +802,115 @@ export const usePlanningStore = create<PlanningState>()(
         });
       },
 
-      seedDayFromCalendar: (date) => {
+      seedDayFromCalendar: (date, windowStartHour = 9, windowEndHour = 17) => {
         get().ensureDailyPlan(date);
-        const dayEvents = get().events.filter((e) =>
-          e.startsAt.startsWith(date)
+        const startH = Math.max(0, Math.min(23, windowStartHour));
+        let endH = Math.max(0, Math.min(24, windowEndHour));
+        if (endH <= startH) endH = Math.min(24, startH + 3);
+        const winStart = startH * 60;
+        const winEnd = endH * 60;
+
+        const dayStart = new Date(date + "T00:00:00");
+        const dayEnd = new Date(date + "T23:59:59");
+        const expanded = expandEvents(
+          get().events.filter((e) => !e.deleted),
+          dayStart,
+          dayEnd
         );
-        const existing = get().dailyPlans[date]?.items ?? [];
-        const existingKeys = new Set(
-          existing.map((i) => `${i.sourceType}:${i.sourceId}`)
-        );
-        const additions: DailyItem[] = [];
-        for (const e of dayEvents) {
-          const key = `event:${e.id}`;
-          if (existingKeys.has(key)) continue;
-          const s = new Date(e.startsAt);
-          const en = new Date(e.endsAt);
-          const dur = Math.max(
-            15,
-            Math.round((en.getTime() - s.getTime()) / 60000)
-          );
-          additions.push({
-            id: crypto.randomUUID(),
-            sourceType: "event",
-            sourceId: e.id,
-            title: e.title,
-            startHour: e.allDay ? 9 : s.getHours(),
-            startMinute: e.allDay ? 0 : s.getMinutes(),
-            durationMinutes: e.allDay ? 60 : dur,
-            done: false,
-            skipped: false,
-            isTop3: false,
-            top3Rank: null,
+
+        // Real calendar events → timed blocks with true duration
+        const eventItems: DailyItem[] = expanded
+          .filter((e) => !e.goalId) // goals re-triaged below
+          .map((e) => {
+            const s = new Date(e.occurrenceStart);
+            const en = new Date(e.occurrenceEnd);
+            let startMin = s.getHours() * 60 + s.getMinutes();
+            let dur = Math.max(
+              15,
+              Math.round((en.getTime() - s.getTime()) / 60000) || 60
+            );
+            if (e.allDay) {
+              startMin = 9 * 60;
+              dur = 60;
+            }
+            return {
+              id: crypto.randomUUID(),
+              sourceType: "event" as const,
+              sourceId: e.id,
+              title: e.title,
+              startHour: Math.floor(startMin / 60),
+              startMinute: startMin % 60,
+              durationMinutes: dur,
+              done: false,
+              skipped: false,
+              isTop3: false,
+              top3Rank: null,
+              notes: e.allDay ? "all-day" : `cal · ${dur}m`,
+            };
           });
-        }
-        // pull active goals as optional blocks
-        for (const g of get().goals.filter((x) => x.status === "active")) {
-          const key = `goal:${g.id}`;
-          if (existingKeys.has(key)) continue;
-          const dow = new Date(date + "T12:00:00").getDay();
-          if (!g.preferredDays.includes(dow)) continue;
-          additions.push({
-            id: crypto.randomUUID(),
-            sourceType: "goal",
-            sourceId: g.id,
+
+        const busy = eventItems.map((i) => ({
+          startMin: i.startHour * 60 + i.startMinute,
+          endMin: i.startHour * 60 + i.startMinute + i.durationMinutes,
+        }));
+
+        const owner = get().activeMemberId;
+        const activeGoals = get().goals.filter((g) => g.status === "active");
+        const goalBlocks = allocateDayWindow({
+          goals: activeGoals.map((g) => ({
+            ...g,
+            id: g.id,
             title: g.title,
-            startHour: g.preferredStartHour,
-            startMinute: 0,
-            durationMinutes: g.sessionMinutes,
-            done: false,
-            skipped: false,
-            isTop3: false,
-            top3Rank: null,
-          });
-        }
+            memberIds: g.memberIds,
+          })),
+          windowStartMin: winStart,
+          windowEndMin: winEnd,
+          busy,
+          ownerId: owner,
+          minBlockMin: 30,
+        });
+
+        const goalItems: DailyItem[] = goalBlocks.map((b) => ({
+          id: crypto.randomUUID(),
+          sourceType: "goal" as const,
+          sourceId: b.goalId,
+          title: b.title,
+          startHour: Math.floor(b.startMin / 60),
+          startMinute: b.startMin % 60,
+          durationMinutes: b.minutes,
+          done: false,
+          skipped: false,
+          isTop3: false,
+          top3Rank: null,
+          notes: `day-alloc · ${b.protected ? "protected" : "soft"} · ${b.shareReason}`,
+        }));
+
+        // Keep custom items user added; replace prior event/goal pulls
+        const prior = get().dailyPlans[date]?.items ?? [];
+        const customs = prior.filter((i) => i.sourceType === "custom");
+
+        const items = [...eventItems, ...goalItems, ...customs].sort(
+          (a, b) =>
+            a.startHour * 60 +
+            a.startMinute -
+            (b.startHour * 60 + b.startMinute)
+        );
+
         set({
           dailyPlans: {
             ...get().dailyPlans,
-            [date]: {
-              date,
-              items: [...existing, ...additions],
-            },
+            [date]: { date, items },
           },
         });
+
+        const actor = owner;
+        const name =
+          get().members.find((m) => m.id === actor)?.name ?? "Someone";
+        get().pushActivity(
+          `${name} pulled day plan ${startH}:00–${endH}:00 (${eventItems.length} events · ${goalItems.length} goal blocks)`,
+          actor
+        );
+        return items.length;
       },
 
       upsertDailyItem: (date, item) => {

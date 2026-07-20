@@ -12,6 +12,10 @@ import {
   upcomingReminders,
 } from "@/lib/planning/types";
 import { goalPercent, remainingMinutes } from "@/lib/planning/goal-math";
+import {
+  HourTimeline,
+  itemsToBlocks,
+} from "@/components/planning/HourTimeline";
 
 export default function TodayHomePage() {
   const selectedDate = usePlanningStore((s) => s.selectedDate);
@@ -22,7 +26,6 @@ export default function TodayHomePage() {
   const dailyPlans = usePlanningStore((s) => s.dailyPlans);
   const goals = usePlanningStore((s) => s.goals);
   const seedDayFromCalendar = usePlanningStore((s) => s.seedDayFromCalendar);
-  const createTodaySchedule = usePlanningStore((s) => s.createTodaySchedule);
   const ensureDailyPlan = usePlanningStore((s) => s.ensureDailyPlan);
   const toggleDailyDone = usePlanningStore((s) => s.toggleDailyDone);
   const setTop3 = usePlanningStore((s) => s.setTop3);
@@ -31,7 +34,7 @@ export default function TodayHomePage() {
   const activeMemberId = usePlanningStore((s) => s.activeMemberId);
 
   const [winStart, setWinStart] = useState(9);
-  const [winEnd, setWinEnd] = useState(12);
+  const [winEnd, setWinEnd] = useState(17);
   const [allocMsg, setAllocMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,11 +93,12 @@ export default function TodayHomePage() {
   const isToday = selectedDate === isoDate();
 
   function runDayAlloc() {
-    const n = createTodaySchedule(selectedDate, winStart, winEnd);
+    // Full pull: calendar events keep true times; goals fill free window time
+    const n = seedDayFromCalendar(selectedDate, winStart, winEnd);
     setAllocMsg(
       n
-        ? `Scheduled ${n} goal block${n === 1 ? "" : "s"} into ${winStart}:00–${winEnd}:00 (balanced by remaining work + progress).`
-        : "Nothing to schedule — add active goals with remaining work, or free the window."
+        ? `Allocated ${n} timed block(s) into ${winStart}:00–${winEnd}:00. Events keep real start/end; goals packed into free gaps by remaining work + progress.`
+        : "Nothing to schedule — free the window or add goals/events."
     );
   }
 
@@ -141,9 +145,9 @@ export default function TodayHomePage() {
         <div>
           <h3 className="text-sm font-semibold">Create today&apos;s schedule</h3>
           <p className="text-xs text-muted">
-            Pick a focus window. Duet splits time across your goals by remaining
-            work and lagging progress — so one goal can&apos;t starve the others.
-            Real events inside the window stay put.
+            Pick a focus window (required). Calendar events keep real start/end
+            times. Goals fill free gaps with allocated minutes from remaining
+            work + progress — never stacked into one hour.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -192,7 +196,8 @@ export default function TodayHomePage() {
               >
                 <span className="font-semibold">{g.title}</span>
                 <span className="text-muted">
-                  {goalPercent(g)}% · {remainingMinutes(g)}m left
+                  {goalPercent({ ...g, sections: g.sections ?? [] })}% ·{" "}
+                  {remainingMinutes({ ...g, sections: g.sections ?? [] })}m left
                   {g.priority === 1 ? " · P1" : ""}
                 </span>
               </li>
@@ -298,58 +303,33 @@ export default function TodayHomePage() {
 
       <section className="card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Day plan</h3>
-          <Link
-            href="/app/calendar"
-            className="text-xs font-semibold text-accent"
-          >
-            Calendar
+          <h3 className="text-sm font-semibold">Day schedule</h3>
+          <Link href="/app/today" className="text-xs font-semibold text-accent">
+            Full planner
           </Link>
         </div>
-        {planItems.length === 0 && dayEvents.length === 0 ? (
-          <p className="text-sm text-muted">Empty — create a schedule above.</p>
+        {planItems.length === 0 ? (
+          <p className="text-sm text-muted">
+            Empty — set a window above and Create schedule.
+          </p>
         ) : (
-          <ul className="space-y-2">
-            {planItems.map((item) => (
-              <li
-                key={item.id}
-                className={`rounded-2xl bg-paper px-3 py-2.5 ${
-                  item.notes?.includes("soft") ? "opacity-60" : ""
-                }`}
-              >
-                <p className="text-sm font-semibold">{item.title}</p>
-                <p className="text-xs text-muted">
-                  {String(item.startHour).padStart(2, "0")}:
-                  {String(item.startMinute).padStart(2, "0")} ·{" "}
-                  {item.durationMinutes}m
-                  {item.notes?.includes("protected") ? " · protected" : ""}
-                  {item.notes?.includes("soft") ? " · soft" : ""}
-                </p>
-              </li>
-            ))}
-            {dayEvents
-              .filter((e) => !planItems.some((p) => p.sourceId === e.goalId))
-              .map((e) => (
-                <li
-                  key={e.id + e.occurrenceStart}
-                  className="rounded-2xl bg-paper px-3 py-2.5"
-                  style={{
-                    borderLeft: `4px solid ${eventColor(e, members, groupColor)}`,
-                    opacity: e.goalId && e.priority > 1 ? 0.55 : 1,
-                  }}
-                >
-                  <p className="text-sm font-semibold">{e.title}</p>
-                  <p className="text-xs text-muted">
-                    {e.allDay
-                      ? "All day"
-                      : `${format(parseISO(e.occurrenceStart), "h:mm a")} – ${format(
-                          parseISO(e.occurrenceEnd),
-                          "h:mm a"
-                        )}`}
-                  </p>
-                </li>
-              ))}
-          </ul>
+          <HourTimeline
+            startHour={Math.min(
+              6,
+              ...planItems.map((i) => i.startHour),
+              6
+            )}
+            endHour={Math.min(
+              24,
+              Math.max(
+                21,
+                ...planItems.map((i) =>
+                  Math.ceil((i.startHour * 60 + i.startMinute + i.durationMinutes) / 60)
+                )
+              ) + 1
+            )}
+            blocks={itemsToBlocks(planItems)}
+          />
         )}
       </section>
 

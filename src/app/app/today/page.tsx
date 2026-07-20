@@ -3,21 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { usePlanningStore } from "@/lib/planning/store";
-import { expandEvents, eventColor, isoDate, top3Items } from "@/lib/planning/types";
+import { isoDate, top3Items } from "@/lib/planning/types";
 import type { DailyItem } from "@/lib/planning/types";
 import {
   HourTimeline,
   itemsToBlocks,
-  type TimelineBlock,
 } from "@/components/planning/HourTimeline";
 
 export default function TodayPage() {
   const selectedDate = usePlanningStore((s) => s.selectedDate);
   const setSelectedDate = usePlanningStore((s) => s.setSelectedDate);
   const dailyPlans = usePlanningStore((s) => s.dailyPlans);
-  const events = usePlanningStore((s) => s.events);
-  const members = usePlanningStore((s) => s.members);
-  const groupColor = usePlanningStore((s) => s.groupColor);
   const seedDayFromCalendar = usePlanningStore((s) => s.seedDayFromCalendar);
   const ensureDailyPlan = usePlanningStore((s) => s.ensureDailyPlan);
   const setTop3 = usePlanningStore((s) => s.setTop3);
@@ -28,7 +24,11 @@ export default function TodayPage() {
   const removeDailyItem = usePlanningStore((s) => s.removeDailyItem);
 
   const [customTitle, setCustomTitle] = useState("");
-  const [customMins, setCustomMins] = useState(30);
+  const [customMins, setCustomMins] = useState(120);
+  const [customHour, setCustomHour] = useState(10);
+  const [pullStart, setPullStart] = useState(9);
+  const [pullEnd, setPullEnd] = useState(17);
+  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     ensureDailyPlan(selectedDate);
@@ -45,58 +45,19 @@ export default function TodayPage() {
   }, [plan]);
 
   const tops = useMemo(() => top3Items(items), [items]);
+  const timelineBlocks = useMemo(() => itemsToBlocks(items), [items]);
 
-  const dayEvents = useMemo(() => {
-    const start = parseISO(selectedDate + "T00:00:00");
-    const end = parseISO(selectedDate + "T23:59:59");
-    return expandEvents(
-      events.filter((e) => !e.deleted),
-      start,
-      end
-    );
-  }, [events, selectedDate]);
-
-  const timelineBlocks: TimelineBlock[] = useMemo(() => {
-    const fromPlan = itemsToBlocks(items);
-    const planIds = new Set(items.map((i) => i.sourceId).filter(Boolean));
-    const fromEvents: TimelineBlock[] = dayEvents
-      .filter((e) => !e.goalId || !planIds.has(e.goalId))
-      .map((e) => {
-        const s = parseISO(e.occurrenceStart);
-        const en = parseISO(e.occurrenceEnd);
-        const startMin = s.getHours() * 60 + s.getMinutes();
-        const durationMin = Math.max(
-          15,
-          Math.round((en.getTime() - s.getTime()) / 60000) || 60
-        );
-        return {
-          id: `ev-${e.id}-${e.occurrenceStart}`,
-          title: e.title,
-          startMin: e.allDay ? 9 * 60 : startMin,
-          durationMin: e.allDay ? 60 : durationMin,
-          soft: !!(e.goalId && e.priority > 1),
-          color: eventColor(e, members, groupColor),
-          subtitle: e.allDay ? "All day" : undefined,
-        };
-      });
-    // prefer plan items over duplicate calendar goal blocks
-    return [...fromPlan, ...fromEvents];
-  }, [items, dayEvents, members, groupColor]);
-
-  // auto-expand visible range to cover blocks
   const { startHour, endHour } = useMemo(() => {
     let minH = 6;
     let maxH = 21;
     for (const b of timelineBlocks) {
       minH = Math.min(minH, Math.floor(b.startMin / 60));
-      maxH = Math.max(
-        maxH,
-        Math.ceil((b.startMin + b.durationMin) / 60)
-      );
+      maxH = Math.max(maxH, Math.ceil((b.startMin + b.durationMin) / 60));
     }
+    // ensure 120m block fully visible
     return {
-      startHour: Math.max(5, minH),
-      endHour: Math.min(24, Math.max(maxH, minH + 1)),
+      startHour: Math.max(5, Math.min(minH, 6)),
+      endHour: Math.min(24, Math.max(maxH + 1, 22)),
     };
   }, [timelineBlocks]);
 
@@ -114,13 +75,20 @@ export default function TodayPage() {
     setTop3(selectedDate, next);
   }
 
+  function pullDay() {
+    const n = seedDayFromCalendar(selectedDate, pullStart, pullEnd);
+    setMsg(
+      `Pulled ${n} timed block(s) into ${String(pullStart).padStart(2, "0")}:00–${String(pullEnd).padStart(2, "0")}:00. Goals packed into free gaps with real durations — not stacked in one hour.`
+    );
+  }
+
   function addCustom() {
     if (!customTitle.trim()) return;
     const item: DailyItem = {
       id: crypto.randomUUID(),
       sourceType: "custom",
       title: customTitle.trim(),
-      startHour: 12,
+      startHour: customHour,
       startMinute: 0,
       durationMinutes: Math.max(15, customMins),
       done: false,
@@ -130,6 +98,9 @@ export default function TodayPage() {
     };
     upsertDailyItem(selectedDate, item);
     setCustomTitle("");
+    setMsg(
+      `Added “${item.title}” ${fmtRange(customHour, 0, customMins)} (${customMins}m spans the grid).`
+    );
   }
 
   function setDuration(id: string, minutes: number) {
@@ -149,7 +120,7 @@ export default function TodayPage() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Today</h2>
           <p className="text-sm text-muted">
-            Top 3 · proportional hour grid · flexible checklist
+            Chronological day column — block height = duration
           </p>
         </div>
         <input
@@ -160,32 +131,77 @@ export default function TodayPage() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold"
-          onClick={() => setSelectedDate(isoDate())}
-        >
-          Jump to today
-        </button>
-        <button
-          type="button"
-          className="rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-white"
-          onClick={() => seedDayFromCalendar(selectedDate)}
-        >
-          Pull calendar + goals into day
-        </button>
-      </div>
+      <section className="card space-y-3 p-4">
+        <div>
+          <h3 className="text-sm font-semibold">
+            Pull calendar + goals into day
+          </h3>
+          <p className="text-xs text-muted">
+            Required: choose the focus window. Calendar events keep their real
+            start/end. Goals are triaged into free time with allocated minutes
+            (balanced so nothing monopolizes the window).
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-semibold text-muted">
+            Window from
+            <select
+              className="field mt-1"
+              value={pullStart}
+              onChange={(e) => setPullStart(Number(e.target.value))}
+            >
+              {hours.map((h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-muted">
+            to
+            <select
+              className="field mt-1"
+              value={pullEnd}
+              onChange={(e) => setPullEnd(Number(e.target.value))}
+            >
+              {hours.map((h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+              <option value={22}>22:00</option>
+              <option value={23}>23:00</option>
+              <option value={24}>24:00</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-white"
+            onClick={pullDay}
+          >
+            Pull & allocate
+          </button>
+          <button
+            type="button"
+            className="rounded-full border border-black/10 bg-white px-3 py-2.5 text-xs font-semibold"
+            onClick={() => setSelectedDate(isoDate())}
+          >
+            Jump to today
+          </button>
+        </div>
+        {msg && (
+          <p className="rounded-xl bg-accent/10 px-3 py-2 text-xs font-medium">
+            {msg}
+          </p>
+        )}
+      </section>
 
       <section className="card p-4">
         <h3 className="text-sm font-semibold">Top 3 for the day</h3>
-        <p className="mb-2 text-xs text-muted">
-          Tap ★ on items below to set / clear priorities (max 3).
-        </p>
         {tops.length === 0 ? (
-          <p className="text-sm text-muted">No top priorities set yet.</p>
+          <p className="mt-1 text-sm text-muted">No top priorities set yet.</p>
         ) : (
-          <ol className="space-y-2">
+          <ol className="mt-2 space-y-2">
             {tops.map((t) => (
               <li
                 key={t.id}
@@ -194,21 +210,11 @@ export default function TodayPage() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">
                   {t.top3Rank}
                 </span>
-                <span
-                  className={`flex-1 font-semibold ${
-                    t.done ? "text-muted line-through" : ""
-                  }`}
-                >
-                  {t.title}
+                <span className="flex-1 font-semibold">{t.title}</span>
+                <span className="text-xs text-muted">
+                  {fmtRange(t.startHour, t.startMinute, t.durationMinutes)} ·{" "}
+                  {t.durationMinutes}m
                 </span>
-                <span className="text-xs text-muted">{t.durationMinutes}m</span>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-accent"
-                  onClick={() => toggleDailyDone(selectedDate, t.id)}
-                >
-                  {t.done ? "Undo" : "Done"}
-                </button>
               </li>
             ))}
           </ol>
@@ -221,19 +227,25 @@ export default function TodayPage() {
           {format(parseISO(selectedDate + "T12:00:00"), "EEE MMM d")}
         </h3>
         <p className="text-xs text-muted">
-          Duration is drawn to scale. A 120‑minute block fills two hours of the
-          grid, aligned to its start time.
+          A 120‑minute block is drawn across two hour rows (start → end), like a
+          normal calendar.
         </p>
-        <HourTimeline
-          startHour={startHour}
-          endHour={endHour}
-          blocks={timelineBlocks}
-          hoursForMove={hours}
-          onMoveStartHour={(id, hour, minute) => {
-            if (id.startsWith("ev-")) return; // calendar events moved via Cal
-            moveDailyItem(selectedDate, id, hour, minute);
-          }}
-        />
+        {timelineBlocks.length === 0 ? (
+          <div className="card p-4 text-sm text-muted">
+            Empty. Set a window and tap <strong>Pull & allocate</strong>, or add
+            a custom block below (try 120m).
+          </div>
+        ) : (
+          <HourTimeline
+            startHour={startHour}
+            endHour={endHour}
+            blocks={timelineBlocks}
+            hoursForMove={hours}
+            onMoveStartHour={(id, hour, minute) =>
+              moveDailyItem(selectedDate, id, hour, minute)
+            }
+          />
+        )}
       </section>
 
       <section className="space-y-2">
@@ -242,16 +254,27 @@ export default function TodayPage() {
           <input
             value={customTitle}
             onChange={(e) => setCustomTitle(e.target.value)}
-            placeholder="Add custom item"
+            placeholder="Add timed block"
             className="min-w-[10rem] flex-1 rounded-xl border border-black/10 px-3 py-2 text-sm"
             onKeyDown={(e) => e.key === "Enter" && addCustom()}
           />
+          <select
+            value={customHour}
+            onChange={(e) => setCustomHour(Number(e.target.value))}
+            className="rounded-xl border border-black/10 px-2 text-xs font-semibold"
+          >
+            {hours.map((h) => (
+              <option key={h} value={h}>
+                Start {h}:00
+              </option>
+            ))}
+          </select>
           <select
             value={customMins}
             onChange={(e) => setCustomMins(Number(e.target.value))}
             className="rounded-xl border border-black/10 px-2 text-xs font-semibold"
           >
-            {[15, 30, 45, 60, 90, 120, 180].map((m) => (
+            {[15, 30, 45, 60, 90, 120, 150, 180, 240].map((m) => (
               <option key={m} value={m}>
                 {m}m
               </option>
@@ -284,27 +307,49 @@ export default function TodayPage() {
                 >
                   {i.title}
                 </p>
-                <p className="text-xs text-muted">
-                  {String(i.startHour).padStart(2, "0")}:
-                  {String(i.startMinute).padStart(2, "0")} →{" "}
-                  {fmtEnd(i.startHour, i.startMinute, i.durationMinutes)} ·{" "}
+                <p className="text-xs font-semibold text-muted">
+                  {fmtRange(i.startHour, i.startMinute, i.durationMinutes)} ·{" "}
                   {i.durationMinutes}m · {i.sourceType}
-                  {i.skipped ? " · skipped" : ""}
                 </p>
-                <label className="mt-1 flex items-center gap-2 text-[11px] text-muted">
-                  Length
-                  <select
-                    value={i.durationMinutes}
-                    onChange={(e) => setDuration(i.id, Number(e.target.value))}
-                    className="rounded border border-black/10 px-1 py-0.5 text-[11px] font-semibold text-ink"
-                  >
-                    {[15, 30, 45, 60, 90, 120, 150, 180, 240].map((m) => (
-                      <option key={m} value={m}>
-                        {m}m
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
+                  <label className="flex items-center gap-1 text-muted">
+                    Start
+                    <select
+                      value={i.startHour}
+                      onChange={(e) =>
+                        moveDailyItem(
+                          selectedDate,
+                          i.id,
+                          Number(e.target.value),
+                          i.startMinute
+                        )
+                      }
+                      className="rounded border border-black/10 px-1 py-0.5 font-semibold text-ink"
+                    >
+                      {hours.map((h) => (
+                        <option key={h} value={h}>
+                          {h}:00
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-1 text-muted">
+                    Length
+                    <select
+                      value={i.durationMinutes}
+                      onChange={(e) =>
+                        setDuration(i.id, Number(e.target.value))
+                      }
+                      className="rounded border border-black/10 px-1 py-0.5 font-semibold text-ink"
+                    >
+                      {[15, 30, 45, 60, 90, 120, 150, 180, 240].map((m) => (
+                        <option key={m} value={m}>
+                          {m}m
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
               </div>
               <div className="flex flex-col gap-1">
                 <button
@@ -339,9 +384,11 @@ export default function TodayPage() {
   );
 }
 
-function fmtEnd(h: number, m: number, dur: number) {
-  const end = h * 60 + m + dur;
-  const eh = Math.floor(end / 60) % 24;
-  const em = end % 60;
-  return `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+function fmtRange(h: number, m: number, dur: number) {
+  const start = h * 60 + m;
+  const end = start + dur;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(start / 60))}:${pad(start % 60)}–${pad(
+    Math.floor(end / 60) % 24
+  )}:${pad(end % 60)}`;
 }
