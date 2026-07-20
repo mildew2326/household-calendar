@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { newId } from "@/lib/id";
 import {
   adaptiveExpenditure,
   bmrMifflin,
@@ -105,7 +106,7 @@ export const useNutritionStore = create<NutritionState>()(
       addCustomFood: (food) => {
         const item: FoodItem = {
           ...food,
-          id: `custom-${crypto.randomUUID()}`,
+          id: `custom-${newId()}`,
           isCustom: true,
         };
         set({ foods: [item, ...get().foods] });
@@ -124,7 +125,7 @@ export const useNutritionStore = create<NutritionState>()(
         if (!food) return;
         const macros = scaleMacros(food.per, food.servingGrams, grams);
         const entry: FoodLogEntry = {
-          id: crypto.randomUUID(),
+          id: newId(),
           date: date ?? get().selectedDate,
           period,
           foodId,
@@ -142,7 +143,7 @@ export const useNutritionStore = create<NutritionState>()(
         const src = get().log.filter((e) => e.date === fromDate);
         const copies = src.map((e) => ({
           ...e,
-          id: crypto.randomUUID(),
+          id: newId(),
           date: toDate,
           createdAt: new Date().toISOString(),
         }));
@@ -155,7 +156,7 @@ export const useNutritionStore = create<NutritionState>()(
         set({
           weights: [
             ...rest,
-            { id: crypto.randomUUID(), date: d, kg },
+            { id: newId(), date: d, kg },
           ].sort((a, b) => a.date.localeCompare(b.date)),
         });
       },

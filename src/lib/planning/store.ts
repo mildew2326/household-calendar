@@ -28,6 +28,7 @@ import {
   sortByTriage,
   triageBlocksFromGoal,
 } from "./goal-math";
+import { newId } from "@/lib/id";
 import { expandEvents } from "./types";
 
 const MEMBER_A = "m-you";
@@ -400,7 +401,7 @@ export const usePlanningStore = create<PlanningState>()(
         set({
           activity: [
             {
-              id: crypto.randomUUID(),
+              id: newId(),
               at: new Date().toISOString(),
               actorId: actor,
               message,
@@ -417,7 +418,7 @@ export const usePlanningStore = create<PlanningState>()(
         }),
 
       addEvent: (e) => {
-        const id = crypto.randomUUID();
+        const id = newId();
         const actor = get().activeMemberId;
         const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
         set({
@@ -482,7 +483,7 @@ export const usePlanningStore = create<PlanningState>()(
         const actor = get().activeMemberId;
         const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
         const comment: EventComment = {
-          id: crypto.randomUUID(),
+          id: newId(),
           authorId: actor,
           body: body.trim(),
           createdAt: new Date().toISOString(),
@@ -507,7 +508,7 @@ export const usePlanningStore = create<PlanningState>()(
               percentComplete: 0,
               targetDate: null,
               ...g,
-              id: crypto.randomUUID(),
+              id: newId(),
               sections: g.sections ?? [],
             },
           ],
@@ -524,7 +525,7 @@ export const usePlanningStore = create<PlanningState>()(
         if (!goal) return 0;
         const blocks = planBlocksFromGoal(goal, 2);
         const newEvents: HouseholdEvent[] = blocks.map((b) => ({
-          id: crypto.randomUUID(),
+          id: newId(),
           title: b.title,
           startsAt: b.startsAt.toISOString(),
           endsAt: b.endsAt.toISOString(),
@@ -545,7 +546,7 @@ export const usePlanningStore = create<PlanningState>()(
         if (!goal) return 0;
         const blocks = triageBlocksFromGoal({ ...goal, title: goal.title, id: goal.id });
         const newEvents: HouseholdEvent[] = blocks.map((b) => ({
-          id: crypto.randomUUID(),
+          id: newId(),
           title: b.title,
           startsAt: b.startsAt.toISOString(),
           endsAt: b.endsAt.toISOString(),
@@ -611,7 +612,7 @@ export const usePlanningStore = create<PlanningState>()(
         );
 
         const newItems: DailyItem[] = blocks.map((b) => ({
-          id: crypto.randomUUID(),
+          id: newId(),
           sourceType: "goal" as const,
           sourceId: b.goalId,
           title: b.title,
@@ -633,7 +634,7 @@ export const usePlanningStore = create<PlanningState>()(
           e.setMinutes(e.getMinutes() + b.minutes);
           const g = activeGoals.find((x) => x.id === b.goalId);
           return {
-            id: crypto.randomUUID(),
+            id: newId(),
             title: b.title,
             startsAt: s.toISOString(),
             endsAt: e.toISOString(),
@@ -677,7 +678,7 @@ export const usePlanningStore = create<PlanningState>()(
 
       addGoalSection: (goalId, title, estimatedMinutes = 60) => {
         const section: GoalSection = {
-          id: crypto.randomUUID(),
+          id: newId(),
           title: title.trim() || "Section",
           estimatedMinutes,
           percentComplete: 0,
@@ -718,7 +719,7 @@ export const usePlanningStore = create<PlanningState>()(
         }),
       addGoalSubtask: (goalId, sectionId, title, estimatedMinutes = 30) => {
         const sub: GoalSubtask = {
-          id: crypto.randomUUID(),
+          id: newId(),
           title: title.trim() || "Step",
           done: false,
           estimatedMinutes,
@@ -776,7 +777,7 @@ export const usePlanningStore = create<PlanningState>()(
             ...get().tasks,
             {
               ...t,
-              id: crypto.randomUUID(),
+              id: newId(),
               completed: false,
               completedAt: null,
             },
@@ -802,7 +803,7 @@ export const usePlanningStore = create<PlanningState>()(
         set({ tasks: get().tasks.filter((t) => t.id !== id) }),
 
       addMeal: (m) =>
-        set({ meals: [...get().meals, { ...m, id: crypto.randomUUID() }] }),
+        set({ meals: [...get().meals, { ...m, id: newId() }] }),
       removeMeal: (id) =>
         set({ meals: get().meals.filter((m) => m.id !== id) }),
 
@@ -848,7 +849,7 @@ export const usePlanningStore = create<PlanningState>()(
               dur = 60;
             }
             return {
-              id: crypto.randomUUID(),
+              id: newId(),
               sourceType: "event" as const,
               sourceId: e.id,
               title: e.title,
@@ -885,7 +886,7 @@ export const usePlanningStore = create<PlanningState>()(
         });
 
         const goalItems: DailyItem[] = goalBlocks.map((b) => ({
-          id: crypto.randomUUID(),
+          id: newId(),
           sourceType: "goal" as const,
           sourceId: b.goalId,
           title: b.title,

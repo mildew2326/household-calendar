@@ -41,7 +41,7 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-4">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Tasks</h2>
         <p className="text-sm text-muted">
@@ -49,20 +49,21 @@ export default function TasksPage() {
         </p>
       </div>
 
-      <div className="card space-y-2 p-4">
+      <div className="card space-y-3 p-4">
         <p className="text-sm font-semibold">Add task</p>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && create()}
           placeholder="What needs doing?"
-          className="w-full rounded-xl border border-black/10 px-3 py-2 text-sm"
+          enterKeyHint="done"
+          className="w-full rounded-2xl border border-black/10 px-4 py-3.5 text-base"
         />
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <select
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
-            className="rounded-xl border border-black/10 px-2 py-2 text-xs"
+            className="rounded-xl border border-black/10 px-3 py-3 text-sm"
           >
             <option value="">Unassigned</option>
             {members.map((m) => (
@@ -75,12 +76,12 @@ export default function TasksPage() {
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            className="rounded-xl border border-black/10 px-2 py-2 text-xs"
+            className="rounded-xl border border-black/10 px-3 py-3 text-sm"
           />
           <select
             value={priority}
             onChange={(e) => setPriority(Number(e.target.value) as Priority)}
-            className="rounded-xl border border-black/10 px-2 py-2 text-xs"
+            className="rounded-xl border border-black/10 px-3 py-3 text-sm"
           >
             {[1, 2, 3, 4, 5].map((p) => (
               <option key={p} value={p}>
@@ -91,7 +92,7 @@ export default function TasksPage() {
           <button
             type="button"
             onClick={create}
-            className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-white"
+            className="min-h-12 rounded-full bg-ink px-4 py-3 text-sm font-semibold text-white"
           >
             Add task
           </button>

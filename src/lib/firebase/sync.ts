@@ -95,7 +95,7 @@ export async function pushHousehold(
   const db = getDb();
   if (!db) throw new Error("Firebase not configured");
   const ref = doc(db, "households", getHouseholdId());
-  const payload: HouseholdCloudState & { serverUpdatedAt?: unknown } = {
+  const payload = stripUndefined({
     version: 1,
     updatedAt: Date.now(),
     updatedBy: state.updatedBy,
@@ -107,11 +107,30 @@ export async function pushHousehold(
     tasks: state.tasks,
     shoppingExtra: state.shoppingExtra,
     groupColor: state.groupColor,
-    activity: state.activity.slice(0, 50),
-    calendarView: state.calendarView,
+    activity: (state.activity ?? []).slice(0, 50),
+    calendarView: state.calendarView ?? null,
     serverUpdatedAt: serverTimestamp(),
-  };
+  });
   await setDoc(ref, payload, { merge: true });
+}
+
+/** Firestore rejects `undefined` anywhere in the document tree. */
+function stripUndefined<T>(value: T): T {
+  if (value === undefined) return null as T;
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    return value.map((v) => stripUndefined(v)) as T;
+  }
+  // leave FieldValue / Timestamp-like alone
+  if (typeof (value as { toMillis?: unknown }).toMillis === "function") {
+    return value;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    out[k] = stripUndefined(v);
+  }
+  return out as T;
 }
 
 export { isFirebaseConfigured };

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePlanningStore } from "@/lib/planning/store";
+import { newId } from "@/lib/id";
 
 export default function ShopPage() {
   const shoppingExtra = usePlanningStore((s) => s.shoppingExtra);
@@ -25,7 +26,7 @@ export default function ShopPage() {
     setLocal((list) => [
       ...list,
       {
-        id: crypto.randomUUID(),
+        id: newId(),
         name,
         qty: "",
         note: "manual",

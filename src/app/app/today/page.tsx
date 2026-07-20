@@ -9,6 +9,7 @@ import {
   HourTimeline,
   itemsToBlocks,
 } from "@/components/planning/HourTimeline";
+import { newId } from "@/lib/id";
 
 export default function TodayPage() {
   const selectedDate = usePlanningStore((s) => s.selectedDate);
@@ -87,7 +88,7 @@ export default function TodayPage() {
   function addCustom() {
     if (!customTitle.trim()) return;
     const item: DailyItem = {
-      id: crypto.randomUUID(),
+      id: newId(),
       sourceType: "custom",
       title: customTitle.trim(),
       startHour: customHour,

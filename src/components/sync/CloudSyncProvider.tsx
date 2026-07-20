@@ -10,6 +10,7 @@ import {
   type SyncStatus,
 } from "@/lib/firebase/sync";
 import { create } from "zustand";
+import { newId } from "@/lib/id";
 
 type SyncUiState = {
   status: SyncStatus;
@@ -29,10 +30,7 @@ export const useSyncStatus = create<SyncUiState>((set) => ({
   setLastSyncedAt: (t) => set({ lastSyncedAt: t }),
 }));
 
-const CLIENT_ID =
-  typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `client-${Math.random().toString(36).slice(2)}`;
+const CLIENT_ID = `client-${newId()}`;
 
 /**
  * Keeps planning zustand ↔ Firestore in sync.
