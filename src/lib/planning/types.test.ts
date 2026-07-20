@@ -73,6 +73,7 @@ describe("planBlocksFromGoal", () => {
       preferredDays: [1, 3, 5],
       preferredStartHour: 18,
       sessionMinutes: 60,
+      sections: [],
     };
     const blocks = planBlocksFromGoal(goal, 1);
     expect(blocks.length).toBeGreaterThan(0);

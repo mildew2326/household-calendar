@@ -58,6 +58,23 @@ export interface HouseholdEventOccurrence extends HouseholdEvent {
   isOccurrence: boolean;
 }
 
+export interface GoalSubtask {
+  id: string;
+  title: string;
+  done: boolean;
+  estimatedMinutes: number;
+}
+
+export interface GoalSection {
+  id: string;
+  title: string;
+  estimatedMinutes: number;
+  /** 0–100 when no subsections */
+  percentComplete: number;
+  done: boolean;
+  subsections: GoalSubtask[];
+}
+
 export interface Goal {
   id: string;
   title: string;
@@ -65,10 +82,25 @@ export interface Goal {
   status: GoalStatus;
   priority: Priority;
   memberIds: string[];
+  /** YYYY-MM-DD deadline */
   targetDate?: string | null;
   preferredDays: number[]; // 0=Sun..6=Sat
   preferredStartHour: number; // 0-23
   sessionMinutes: number;
+  /** manual % when sections empty */
+  percentComplete?: number;
+  sections: GoalSection[];
+}
+
+export interface HouseholdTask {
+  id: string;
+  title: string;
+  notes?: string;
+  assigneeId: string | null;
+  dueDate?: string | null; // YYYY-MM-DD
+  priority: Priority;
+  completed: boolean;
+  completedAt?: string | null;
 }
 
 export interface DailyItem {

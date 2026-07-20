@@ -284,6 +284,12 @@ export default function CalendarPage() {
                 className="card w-full px-4 py-3 text-left"
                 style={{
                   borderLeft: `4px solid ${eventColor(e, members, groupColor)}`,
+                  opacity:
+                    e.goalId && e.priority > 1
+                      ? 0.5
+                      : e.colorOverride === "#94a3b8"
+                        ? 0.5
+                        : 1,
                 }}
                 onClick={() => {
                   const base = events.find((x) => x.id === e.id);
@@ -377,6 +383,12 @@ export default function CalendarPage() {
                           className="w-full rounded-xl bg-paper px-3 py-2 text-left text-sm"
                           style={{
                             borderLeft: `4px solid ${eventColor(e, members, groupColor)}`,
+                            opacity:
+                              e.goalId && e.priority > 1
+                                ? 0.5
+                                : e.colorOverride === "#94a3b8"
+                                  ? 0.5
+                                  : 1,
                           }}
                           onClick={() => {
                             const base = events.find((x) => x.id === e.id);

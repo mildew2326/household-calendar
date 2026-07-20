@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { usePlanningStore } from "@/lib/planning/store";
@@ -11,6 +11,7 @@ import {
   top3Items,
   upcomingReminders,
 } from "@/lib/planning/types";
+import { goalPercent, remainingMinutes } from "@/lib/planning/goal-math";
 
 export default function TodayHomePage() {
   const selectedDate = usePlanningStore((s) => s.selectedDate);
@@ -19,12 +20,19 @@ export default function TodayHomePage() {
   const members = usePlanningStore((s) => s.members);
   const groupColor = usePlanningStore((s) => s.groupColor);
   const dailyPlans = usePlanningStore((s) => s.dailyPlans);
+  const goals = usePlanningStore((s) => s.goals);
   const seedDayFromCalendar = usePlanningStore((s) => s.seedDayFromCalendar);
+  const createTodaySchedule = usePlanningStore((s) => s.createTodaySchedule);
   const ensureDailyPlan = usePlanningStore((s) => s.ensureDailyPlan);
   const toggleDailyDone = usePlanningStore((s) => s.toggleDailyDone);
   const setTop3 = usePlanningStore((s) => s.setTop3);
   const activity = usePlanningStore((s) => s.activity);
   const shoppingExtra = usePlanningStore((s) => s.shoppingExtra);
+  const activeMemberId = usePlanningStore((s) => s.activeMemberId);
+
+  const [winStart, setWinStart] = useState(9);
+  const [winEnd, setWinEnd] = useState(12);
+  const [allocMsg, setAllocMsg] = useState<string | null>(null);
 
   useEffect(() => {
     ensureDailyPlan(selectedDate);
@@ -52,18 +60,43 @@ export default function TodayHomePage() {
   const planItems = useMemo(() => {
     const items = dailyPlans[selectedDate]?.items ?? [];
     return [...items].sort(
-      (a, b) => a.startHour * 60 + a.startMinute - (b.startHour * 60 + b.startMinute)
+      (a, b) =>
+        a.startHour * 60 + a.startMinute - (b.startHour * 60 + b.startMinute)
     );
   }, [dailyPlans, selectedDate]);
 
   const tops = useMemo(() => top3Items(planItems), [planItems]);
   const openShop = shoppingExtra.filter((s) => !s.checked).length;
   const reminders = useMemo(
-    () => upcomingReminders(events.filter((e) => !e.deleted), new Date(), 60 * 12),
+    () =>
+      upcomingReminders(
+        events.filter((e) => !e.deleted),
+        new Date(),
+        60 * 12
+      ),
     [events]
   );
 
+  const myGoals = useMemo(
+    () =>
+      goals.filter(
+        (g) =>
+          g.status === "active" &&
+          (!g.memberIds.length || g.memberIds.includes(activeMemberId))
+      ),
+    [goals, activeMemberId]
+  );
+
   const isToday = selectedDate === isoDate();
+
+  function runDayAlloc() {
+    const n = createTodaySchedule(selectedDate, winStart, winEnd);
+    setAllocMsg(
+      n
+        ? `Scheduled ${n} goal block${n === 1 ? "" : "s"} into ${winStart}:00–${winEnd}:00 (balanced by remaining work + progress).`
+        : "Nothing to schedule — add active goals with remaining work, or free the window."
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -96,12 +129,81 @@ export default function TodayHomePage() {
             <button
               type="button"
               onClick={() => seedDayFromCalendar(selectedDate)}
-              className="rounded-full bg-accent px-3 py-1.5 text-xs font-semibold"
+              className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold"
             >
-              Build day plan
+              Pull calendar
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="card space-y-3 p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Create today&apos;s schedule</h3>
+          <p className="text-xs text-muted">
+            Pick a focus window. Duet splits time across your goals by remaining
+            work and lagging progress — so one goal can&apos;t starve the others.
+            Real events inside the window stay put.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-semibold text-muted">
+            From
+            <select
+              className="field mt-1"
+              value={winStart}
+              onChange={(e) => setWinStart(Number(e.target.value))}
+            >
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-muted">
+            To
+            <select
+              className="field mt-1"
+              value={winEnd}
+              onChange={(e) => setWinEnd(Number(e.target.value))}
+            >
+              {Array.from({ length: 25 }, (_, h) => (
+                <option key={h} value={h}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={runDayAlloc}
+            className="rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-white"
+          >
+            Create schedule
+          </button>
+        </div>
+        {myGoals.length > 0 && (
+          <ul className="space-y-1.5 border-t border-black/5 pt-3">
+            {myGoals.map((g) => (
+              <li
+                key={g.id}
+                className="flex items-center justify-between text-xs"
+              >
+                <span className="font-semibold">{g.title}</span>
+                <span className="text-muted">
+                  {goalPercent(g)}% · {remainingMinutes(g)}m left
+                  {g.priority === 1 ? " · P1" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {allocMsg && (
+          <p className="rounded-xl bg-accent/10 px-3 py-2 text-xs font-medium">
+            {allocMsg}
+          </p>
+        )}
       </section>
 
       <div className="grid grid-cols-3 gap-2">
@@ -139,7 +241,7 @@ export default function TodayHomePage() {
         </div>
         {tops.length === 0 ? (
           <p className="text-sm text-muted">
-            No top 3 yet. Build day plan, then star items in the planner.
+            Create a schedule or pull calendar, then star up to 3 items.
           </p>
         ) : (
           <ol className="space-y-2">
@@ -173,7 +275,7 @@ export default function TodayHomePage() {
           <div className="mt-3 flex flex-wrap gap-1">
             {planItems
               .filter((i) => !i.isTop3 && !i.skipped)
-              .slice(0, 4)
+              .slice(0, 6)
               .map((i) => (
                 <button
                   key={i.id}
@@ -196,7 +298,7 @@ export default function TodayHomePage() {
 
       <section className="card p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Schedule</h3>
+          <h3 className="text-sm font-semibold">Day plan</h3>
           <Link
             href="/app/calendar"
             className="text-xs font-semibold text-accent"
@@ -204,32 +306,49 @@ export default function TodayHomePage() {
             Calendar
           </Link>
         </div>
-        {dayEvents.length === 0 ? (
-          <p className="text-sm text-muted">Nothing on the calendar.</p>
+        {planItems.length === 0 && dayEvents.length === 0 ? (
+          <p className="text-sm text-muted">Empty — create a schedule above.</p>
         ) : (
           <ul className="space-y-2">
-            {dayEvents.map((e) => (
+            {planItems.map((item) => (
               <li
-                key={e.id + e.occurrenceStart}
-                className="rounded-2xl bg-paper px-3 py-2.5"
-                style={{
-                  borderLeft: `4px solid ${eventColor(e, members, groupColor)}`,
-                }}
+                key={item.id}
+                className={`rounded-2xl bg-paper px-3 py-2.5 ${
+                  item.notes?.includes("soft") ? "opacity-60" : ""
+                }`}
               >
-                <p className="text-sm font-semibold">{e.title}</p>
+                <p className="text-sm font-semibold">{item.title}</p>
                 <p className="text-xs text-muted">
-                  {e.allDay
-                    ? "All day"
-                    : `${format(parseISO(e.occurrenceStart), "h:mm a")} – ${format(
-                        parseISO(e.occurrenceEnd),
-                        "h:mm a"
-                      )}`}
-                  {e.location ? ` · ${e.location}` : ""}
-                  {e.recurrence ? ` · ${e.recurrence.toLowerCase()}` : ""}
-                  {e.kind === "group" ? " · Group" : ""}
+                  {String(item.startHour).padStart(2, "0")}:
+                  {String(item.startMinute).padStart(2, "0")} ·{" "}
+                  {item.durationMinutes}m
+                  {item.notes?.includes("protected") ? " · protected" : ""}
+                  {item.notes?.includes("soft") ? " · soft" : ""}
                 </p>
               </li>
             ))}
+            {dayEvents
+              .filter((e) => !planItems.some((p) => p.sourceId === e.goalId))
+              .map((e) => (
+                <li
+                  key={e.id + e.occurrenceStart}
+                  className="rounded-2xl bg-paper px-3 py-2.5"
+                  style={{
+                    borderLeft: `4px solid ${eventColor(e, members, groupColor)}`,
+                    opacity: e.goalId && e.priority > 1 ? 0.55 : 1,
+                  }}
+                >
+                  <p className="text-sm font-semibold">{e.title}</p>
+                  <p className="text-xs text-muted">
+                    {e.allDay
+                      ? "All day"
+                      : `${format(parseISO(e.occurrenceStart), "h:mm a")} – ${format(
+                          parseISO(e.occurrenceEnd),
+                          "h:mm a"
+                        )}`}
+                  </p>
+                </li>
+              ))}
           </ul>
         )}
       </section>
@@ -262,17 +381,11 @@ export default function TodayHomePage() {
       </section>
 
       <div className="grid grid-cols-2 gap-2 pb-2">
-        <Link
-          href="/app/lists"
-          className="card px-4 py-4 text-sm font-semibold"
-        >
-          Lists & shopping →
+        <Link href="/app/goals" className="card px-4 py-4 text-sm font-semibold">
+          Goals & milestones →
         </Link>
-        <Link
-          href="/app/more"
-          className="card px-4 py-4 text-sm font-semibold"
-        >
-          Goals & labs →
+        <Link href="/app/lists" className="card px-4 py-4 text-sm font-semibold">
+          Lists & shopping →
         </Link>
       </div>
     </div>

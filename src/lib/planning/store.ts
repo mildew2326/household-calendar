@@ -13,11 +13,22 @@ import {
   type DailyPlan,
   type EventComment,
   type Goal,
+  type GoalSection,
+  type GoalSubtask,
   type HouseholdEvent,
+  type HouseholdTask,
   type Member,
   type PlannedMeal,
   type Priority,
 } from "./types";
+import {
+  allocateDayWindow,
+  goalPercent,
+  remainingMinutes,
+  sortByTriage,
+  triageBlocksFromGoal,
+} from "./goal-math";
+import { expandEvents } from "./types";
 
 const MEMBER_A = "m-you";
 const MEMBER_B = "m-partner";
@@ -103,6 +114,7 @@ interface PlanningState {
   goals: Goal[];
   dailyPlans: Record<string, DailyPlan>;
   meals: PlannedMeal[];
+  tasks: HouseholdTask[];
   shoppingExtra: {
     id: string;
     name: string;
@@ -133,6 +145,27 @@ interface PlanningState {
   updateGoal: (id: string, patch: Partial<Goal>) => void;
   removeGoal: (id: string) => void;
   scheduleGoal: (goalId: string) => number;
+  scheduleGoalTriage: (goalId: string) => number;
+  /** Pack today's focus window across goals (balanced by remaining work + lag). */
+  createTodaySchedule: (
+    date: string,
+    windowStartHour: number,
+    windowEndHour: number
+  ) => number;
+  addGoalSection: (goalId: string, title: string, estimatedMinutes?: number) => void;
+  updateGoalSection: (goalId: string, sectionId: string, patch: Partial<GoalSection>) => void;
+  removeGoalSection: (goalId: string, sectionId: string) => void;
+  addGoalSubtask: (goalId: string, sectionId: string, title: string, estimatedMinutes?: number) => void;
+  toggleGoalSubtask: (goalId: string, sectionId: string, subId: string) => void;
+  setGoalPercent: (goalId: string, percent: number) => void;
+
+  addTask: (t: Omit<HouseholdTask, "id" | "completed" | "completedAt">) => void;
+  updateTask: (id: string, patch: Partial<HouseholdTask>) => void;
+  toggleTask: (id: string) => void;
+  removeTask: (id: string) => void;
+
+  addMeal: (m: Omit<PlannedMeal, "id">) => void;
+  removeMeal: (id: string) => void;
 
   ensureDailyPlan: (date: string) => void;
   seedDayFromCalendar: (date: string) => void;
@@ -229,10 +262,37 @@ export const usePlanningStore = create<PlanningState>()(
           status: "active",
           priority: 2,
           memberIds: [MEMBER_A],
-          targetDate: null,
-          preferredDays: [1, 3, 5], // Mon Wed Fri
+          targetDate: (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 10);
+            return isoDate(d);
+          })(),
+          preferredDays: [1, 3, 5],
           preferredStartHour: 18,
           sessionMinutes: 60,
+          percentComplete: 25,
+          sections: [
+            {
+              id: "gs1",
+              title: "Cable management",
+              estimatedMinutes: 90,
+              percentComplete: 40,
+              done: false,
+              subsections: [
+                { id: "gst1", title: "Label power strips", done: true, estimatedMinutes: 20 },
+                { id: "gst2", title: "Route monitor cables", done: false, estimatedMinutes: 40 },
+                { id: "gst3", title: "Hide under desk", done: false, estimatedMinutes: 30 },
+              ],
+            },
+            {
+              id: "gs2",
+              title: "Lighting",
+              estimatedMinutes: 60,
+              percentComplete: 0,
+              done: false,
+              subsections: [],
+            },
+          ],
         },
         {
           id: "g2",
@@ -241,9 +301,55 @@ export const usePlanningStore = create<PlanningState>()(
           status: "active",
           priority: 1,
           memberIds: [MEMBER_A, MEMBER_B],
+          targetDate: (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 21);
+            return isoDate(d);
+          })(),
           preferredDays: [0],
           preferredStartHour: 15,
           sessionMinutes: 90,
+          percentComplete: 10,
+          sections: [
+            {
+              id: "gs3",
+              title: "Sunday batch cook",
+              estimatedMinutes: 120,
+              percentComplete: 20,
+              done: false,
+              subsections: [],
+            },
+            {
+              id: "gs4",
+              title: "Midweek refresh",
+              estimatedMinutes: 45,
+              percentComplete: 0,
+              done: false,
+              subsections: [],
+            },
+          ],
+        },
+      ],
+      tasks: [
+        {
+          id: "task1",
+          title: "Schedule HVAC checkup",
+          notes: "",
+          assigneeId: MEMBER_A,
+          dueDate: isoDate(),
+          priority: 2,
+          completed: false,
+          completedAt: null,
+        },
+        {
+          id: "task2",
+          title: "Order dish soap",
+          notes: "",
+          assigneeId: MEMBER_B,
+          dueDate: null,
+          priority: 4,
+          completed: false,
+          completedAt: null,
         },
       ],
       dailyPlans: {},
@@ -371,7 +477,18 @@ export const usePlanningStore = create<PlanningState>()(
       },
 
       addGoal: (g) =>
-        set({ goals: [...get().goals, { ...g, id: crypto.randomUUID() }] }),
+        set({
+          goals: [
+            ...get().goals,
+            {
+              percentComplete: 0,
+              targetDate: null,
+              ...g,
+              id: crypto.randomUUID(),
+              sections: g.sections ?? [],
+            },
+          ],
+        }),
       updateGoal: (id, patch) =>
         set({
           goals: get().goals.map((g) => (g.id === id ? { ...g, ...patch } : g)),
@@ -393,10 +510,278 @@ export const usePlanningStore = create<PlanningState>()(
           kind: goal.memberIds.length > 1 ? "group" : "personal",
           priority: goal.priority,
           goalId: goal.id,
+          reminderMinutes: [60],
+          comments: [],
         }));
         set({ events: [...get().events, ...newEvents] });
         return newEvents.length;
       },
+
+      scheduleGoalTriage: (goalId) => {
+        const goal = get().goals.find((g) => g.id === goalId);
+        if (!goal) return 0;
+        const blocks = triageBlocksFromGoal({ ...goal, title: goal.title, id: goal.id });
+        const newEvents: HouseholdEvent[] = blocks.map((b) => ({
+          id: crypto.randomUUID(),
+          title: b.title,
+          startsAt: b.startsAt.toISOString(),
+          endsAt: b.endsAt.toISOString(),
+          allDay: false,
+          memberId: goal.memberIds.length === 1 ? goal.memberIds[0] : null,
+          kind: goal.memberIds.length > 1 ? "group" : "personal",
+          priority: goal.priority,
+          goalId: goal.id,
+          notes: "Triage block — remaining work vs deadline",
+          reminderMinutes: [60],
+          comments: [],
+        }));
+        set({ events: [...get().events, ...newEvents] });
+        const actor = get().activeMemberId;
+        const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
+        get().pushActivity(`${name} triaged schedule for ${goal.title}`, actor);
+        return newEvents.length;
+      },
+
+      createTodaySchedule: (date, windowStartHour, windowEndHour) => {
+        const startH = Math.max(0, Math.min(23, windowStartHour));
+        let endH = Math.max(0, Math.min(24, windowEndHour));
+        if (endH <= startH) endH = Math.min(24, startH + 2);
+        const winStart = startH * 60;
+        const winEnd = endH * 60;
+
+        const dayStart = new Date(date + "T00:00:00");
+        const dayEnd = new Date(date + "T23:59:59");
+        const expanded = expandEvents(
+          get().events.filter((e) => !e.deleted && !e.goalId),
+          dayStart,
+          dayEnd
+        );
+        const busy = expanded.map((e) => {
+          const s = new Date(e.occurrenceStart);
+          const en = new Date(e.occurrenceEnd);
+          return {
+            startMin: s.getHours() * 60 + s.getMinutes(),
+            endMin: en.getHours() * 60 + en.getMinutes() || 24 * 60,
+          };
+        });
+
+        const owner = get().activeMemberId;
+        const activeGoals = get().goals.filter((g) => g.status === "active");
+        const blocks = allocateDayWindow({
+          goals: activeGoals.map((g) => ({
+            ...g,
+            id: g.id,
+            title: g.title,
+            memberIds: g.memberIds,
+          })),
+          windowStartMin: winStart,
+          windowEndMin: winEnd,
+          busy,
+          ownerId: owner,
+        });
+
+        get().ensureDailyPlan(date);
+        const plan = get().dailyPlans[date];
+        // Remove prior auto goal allocations for this date (keep manual custom/event)
+        const kept = (plan?.items ?? []).filter(
+          (i) => !(i.sourceType === "goal" && i.notes?.includes("day-alloc"))
+        );
+
+        const newItems: DailyItem[] = blocks.map((b) => ({
+          id: crypto.randomUUID(),
+          sourceType: "goal" as const,
+          sourceId: b.goalId,
+          title: b.title,
+          startHour: Math.floor(b.startMin / 60),
+          startMinute: b.startMin % 60,
+          durationMinutes: b.minutes,
+          done: false,
+          skipped: false,
+          isTop3: false,
+          top3Rank: null,
+          notes: `day-alloc · ${b.protected ? "protected" : "soft"} · ${b.shareReason}`,
+        }));
+
+        // Also place soft/protected goal events on calendar for the day (faded if soft)
+        const calEvents: HouseholdEvent[] = blocks.map((b) => {
+          const s = new Date(date + "T00:00:00");
+          s.setHours(Math.floor(b.startMin / 60), b.startMin % 60, 0, 0);
+          const e = new Date(s);
+          e.setMinutes(e.getMinutes() + b.minutes);
+          const g = activeGoals.find((x) => x.id === b.goalId);
+          return {
+            id: crypto.randomUUID(),
+            title: b.title,
+            startsAt: s.toISOString(),
+            endsAt: e.toISOString(),
+            allDay: false,
+            memberId: g?.memberIds?.[0] ?? owner,
+            kind: "personal" as const,
+            priority: (g?.priority ?? 3) as Priority,
+            goalId: b.goalId,
+            notes: b.shareReason,
+            // soft = faded via priority > 1 in calendar render
+            colorOverride: b.protected ? null : "#94a3b8",
+            reminderMinutes: b.protected ? [30] : [],
+            comments: [],
+          };
+        });
+
+        // drop previous day-alloc calendar events for this date
+        const eventsKept = get().events.filter((e) => {
+          if (!e.goalId || e.deleted) return true;
+          if (!e.startsAt.startsWith(date)) return true;
+          if (e.notes?.includes("share") || e.notes?.includes("% done")) return false;
+          return true;
+        });
+
+        set({
+          dailyPlans: {
+            ...get().dailyPlans,
+            [date]: { date, items: [...kept, ...newItems] },
+          },
+          events: [...eventsKept, ...calEvents],
+        });
+
+        const actor = owner;
+        const name = get().members.find((m) => m.id === actor)?.name ?? "Someone";
+        get().pushActivity(
+          `${name} created day schedule (${blocks.length} goal blocks, ${startH}:00–${endH}:00)`,
+          actor
+        );
+        return blocks.length;
+      },
+
+      addGoalSection: (goalId, title, estimatedMinutes = 60) => {
+        const section: GoalSection = {
+          id: crypto.randomUUID(),
+          title: title.trim() || "Section",
+          estimatedMinutes,
+          percentComplete: 0,
+          done: false,
+          subsections: [],
+        };
+        set({
+          goals: get().goals.map((g) =>
+            g.id === goalId
+              ? { ...g, sections: [...(g.sections ?? []), section] }
+              : g
+          ),
+        });
+      },
+      updateGoalSection: (goalId, sectionId, patch) =>
+        set({
+          goals: get().goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  sections: (g.sections ?? []).map((s) =>
+                    s.id === sectionId ? { ...s, ...patch } : s
+                  ),
+                }
+              : g
+          ),
+        }),
+      removeGoalSection: (goalId, sectionId) =>
+        set({
+          goals: get().goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  sections: (g.sections ?? []).filter((s) => s.id !== sectionId),
+                }
+              : g
+          ),
+        }),
+      addGoalSubtask: (goalId, sectionId, title, estimatedMinutes = 30) => {
+        const sub: GoalSubtask = {
+          id: crypto.randomUUID(),
+          title: title.trim() || "Step",
+          done: false,
+          estimatedMinutes,
+        };
+        set({
+          goals: get().goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  sections: (g.sections ?? []).map((s) =>
+                    s.id === sectionId
+                      ? { ...s, subsections: [...(s.subsections ?? []), sub] }
+                      : s
+                  ),
+                }
+              : g
+          ),
+        });
+      },
+      toggleGoalSubtask: (goalId, sectionId, subId) =>
+        set({
+          goals: get().goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  sections: (g.sections ?? []).map((s) =>
+                    s.id === sectionId
+                      ? {
+                          ...s,
+                          subsections: (s.subsections ?? []).map((sub) =>
+                            sub.id === subId ? { ...sub, done: !sub.done } : sub
+                          ),
+                        }
+                      : s
+                  ),
+                }
+              : g
+          ),
+        }),
+      setGoalPercent: (goalId, percent) =>
+        set({
+          goals: get().goals.map((g) =>
+            g.id === goalId
+              ? {
+                  ...g,
+                  percentComplete: Math.max(0, Math.min(100, percent)),
+                }
+              : g
+          ),
+        }),
+
+      addTask: (t) =>
+        set({
+          tasks: [
+            ...get().tasks,
+            {
+              ...t,
+              id: crypto.randomUUID(),
+              completed: false,
+              completedAt: null,
+            },
+          ],
+        }),
+      updateTask: (id, patch) =>
+        set({
+          tasks: get().tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+        }),
+      toggleTask: (id) =>
+        set({
+          tasks: get().tasks.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  completed: !t.completed,
+                  completedAt: !t.completed ? new Date().toISOString() : null,
+                }
+              : t
+          ),
+        }),
+      removeTask: (id) =>
+        set({ tasks: get().tasks.filter((t) => t.id !== id) }),
+
+      addMeal: (m) =>
+        set({ meals: [...get().meals, { ...m, id: crypto.randomUUID() }] }),
+      removeMeal: (id) =>
+        set({ meals: get().meals.filter((m) => m.id !== id) }),
 
       ensureDailyPlan: (date) => {
         if (get().dailyPlans[date]) return;
@@ -612,9 +997,9 @@ export const usePlanningStore = create<PlanningState>()(
 
       shoppingLines: () => buildShoppingFromMeals(get().meals, get().members),
     }),
-    { name: "duet-planning-v2" }
+    { name: "duet-planning-v3" }
   )
 );
 
-export { MEMBER_A, MEMBER_B };
+export { MEMBER_A, MEMBER_B, goalPercent, remainingMinutes, sortByTriage };
 export type { Priority };

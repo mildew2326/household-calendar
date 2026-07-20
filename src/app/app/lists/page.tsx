@@ -26,31 +26,35 @@ const links = [
 
 export default function ListsHubPage() {
   const shoppingExtra = usePlanningStore((s) => s.shoppingExtra);
+  const tasks = usePlanningStore((s) => s.tasks);
+  const meals = usePlanningStore((s) => s.meals);
   const openShop = shoppingExtra.filter((s) => !s.checked).length;
+  const openTasks = tasks.filter((t) => !t.completed).length;
 
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Lists</h2>
         <p className="text-sm text-muted">
-          Household ops in one place — Cozi-style without the clutter
+          Household ops in one place — shopping, tasks, meals
         </p>
       </div>
 
-      <div className="card flex items-center justify-between p-4">
-        <div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card p-4">
           <p className="text-xs font-bold tracking-wide text-muted uppercase">
-            Open shopping items
+            Open shop
           </p>
           <p className="text-3xl font-semibold">{openShop}</p>
         </div>
-        <Link
-          href="/app/shop"
-          className="rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white"
-        >
-          Open shop
-        </Link>
+        <div className="card p-4">
+          <p className="text-xs font-bold tracking-wide text-muted uppercase">
+            Open tasks
+          </p>
+          <p className="text-3xl font-semibold">{openTasks}</p>
+        </div>
       </div>
+      <p className="text-xs text-muted">{meals.length} meals planned this list</p>
 
       <ul className="space-y-3">
         {links.map((l) => (

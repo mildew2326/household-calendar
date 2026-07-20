@@ -16,3 +16,15 @@
 3. F04 recurrence expand in list API
 4. F05 realtime subscriptions
 5. Persist demo shopping/todos to Supabase when configured
+
+## Incident: Demo 500 (2026-07-17)
+
+| Check | Result |
+|-------|--------|
+| Symptom | `http://127.0.0.1:3010` returned **500 Internal Server Error** |
+| Root cause | Stale/crashed **Next turbopack dev** process (`next dev -p 3010`) after UX sprint; build itself was healthy |
+| Fix | Killed bad dev server; ran `npm run build` (PASS); started **production** `next start -p 3010 -H 0.0.0.0` |
+| Verify | `/`, `/app`, `/app/calendar` all **HTTP 200** |
+| URLs | Local: http://127.0.0.1:3010/app · LAN: http://10.0.0.213:3010/app |
+| Tests | 21/21 PASS |
+
