@@ -48,16 +48,18 @@ export default function TodayPage() {
   const timelineBlocks = useMemo(() => itemsToBlocks(items), [items]);
 
   const { startHour, endHour } = useMemo(() => {
-    let minH = 6;
-    let maxH = 21;
+    if (!timelineBlocks.length) return { startHour: 6, endHour: 22 };
+    let minM = Infinity;
+    let maxM = -Infinity;
     for (const b of timelineBlocks) {
-      minH = Math.min(minH, Math.floor(b.startMin / 60));
-      maxH = Math.max(maxH, Math.ceil((b.startMin + b.durationMin) / 60));
+      minM = Math.min(minM, b.startMin);
+      maxM = Math.max(maxM, b.startMin + b.durationMin);
     }
-    // ensure 120m block fully visible
+    const startHour = Math.max(0, Math.floor(minM / 60) - 1);
+    const endHour = Math.min(24, Math.ceil(maxM / 60) + 1);
     return {
-      startHour: Math.max(5, Math.min(minH, 6)),
-      endHour: Math.min(24, Math.max(maxH + 1, 22)),
+      startHour: Math.min(startHour, 6),
+      endHour: Math.max(endHour, 22),
     };
   }, [timelineBlocks]);
 

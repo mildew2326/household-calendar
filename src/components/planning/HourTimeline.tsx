@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import type { DailyItem } from "@/lib/planning/types";
 
-/** px per minute — 60m = 48px, 120m = 96px */
-export const PX_PER_MIN = 0.9;
+/** Pixels per minute. 60m = 64px, 120m = 128px (clear two-hour span). */
+export const PX_PER_MIN = 64 / 60;
 
 export type TimelineBlock = {
   id: string;
@@ -33,13 +33,13 @@ export function itemsToBlocks(items: DailyItem[]): TimelineBlock[] {
         title: i.title,
         startMin,
         durationMin,
-        done: i.done,
-        skipped: i.skipped,
-        isTop3: i.isTop3,
+        done: !!i.done,
+        skipped: !!i.skipped,
+        isTop3: !!i.isTop3,
         top3Rank: i.top3Rank,
         soft: !!i.notes?.includes("soft"),
         editable: true,
-        subtitle: `${fmt(startMin)}–${fmt(startMin + durationMin)} · ${durationMin}m`,
+        subtitle: `${fmt(startMin)}–${fmt(startMin + durationMin)} · ${formatDuration(durationMin)}`,
       };
     });
 }
@@ -53,8 +53,10 @@ type Props = {
 };
 
 /**
- * Classic calendar day column: each block's height = duration.
- * 120 minutes occupies exactly two hour rows.
+ * Google/Fantastical-style day column:
+ * - vertical position = start time
+ * - height = full duration (120m draws across two hour lines)
+ * - true overlaps sit in side-by-side columns
  */
 export function HourTimeline({
   startHour = 6,
@@ -64,11 +66,12 @@ export function HourTimeline({
   hoursForMove,
 }: Props) {
   const rangeStart = startHour * 60;
-  const rangeEnd = endHour * 60;
+  const rangeEnd = Math.max(rangeStart + 60, endHour * 60);
   const totalMin = rangeEnd - rangeStart;
   const heightPx = totalMin * PX_PER_MIN;
+
   const hours = Array.from(
-    { length: endHour - startHour },
+    { length: Math.max(1, endHour - startHour) },
     (_, i) => startHour + i
   );
   const moveHours =
@@ -76,37 +79,51 @@ export function HourTimeline({
     Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
   const laid = useMemo(
-    () => layoutDay(blocks, rangeStart, rangeEnd),
+    () => layoutOverlaps(blocks, rangeStart, rangeEnd),
     [blocks, rangeStart, rangeEnd]
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm">
-      <div className="flex border-b border-black/5 bg-paper/80 px-3 py-2 text-[11px] font-semibold text-muted">
-        <span className="w-14">Time</span>
-        <span className="flex-1">Schedule (height = duration)</span>
+    <div className="rounded-2xl border border-black/10 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-black/5 bg-[#faf9f6] px-3 py-2">
+        <span className="text-[11px] font-bold tracking-wide text-muted uppercase">
+          Day column
+        </span>
+        <span className="text-[10px] text-muted">
+          Height = duration · overlaps side-by-side
+        </span>
       </div>
 
-      <div className="relative flex" style={{ height: heightPx }}>
-        {/* time gutter */}
-        <div className="relative w-14 shrink-0 border-r border-black/8 bg-[#faf9f6]">
+      {/* IMPORTANT: both columns share explicit height so absolute blocks paint fully */}
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: "3.25rem 1fr",
+          height: heightPx,
+        }}
+      >
+        {/* time labels */}
+        <div
+          className="relative border-r border-black/10 bg-[#faf9f6]"
+          style={{ height: heightPx }}
+        >
           {hours.map((h, idx) => (
             <div
               key={h}
-              className="absolute right-1 text-[11px] font-semibold tabular-nums text-muted"
-              style={{ top: idx * 60 * PX_PER_MIN - 1 }}
+              className="absolute right-1.5 -translate-y-1/2 text-[11px] font-semibold tabular-nums text-muted"
+              style={{ top: idx * 60 * PX_PER_MIN }}
             >
               {String(h).padStart(2, "0")}:00
             </div>
           ))}
         </div>
 
-        {/* grid + events */}
-        <div className="relative min-w-0 flex-1">
-          {/* hour lines */}
+        {/* event canvas — fixed height, not collapsed by absolute children */}
+        <div className="relative" style={{ height: heightPx }}>
+          {/* hour grid lines */}
           {hours.map((h, idx) => (
             <div
-              key={h}
+              key={`line-${h}`}
               className="pointer-events-none absolute left-0 right-0 border-t border-black/10"
               style={{ top: idx * 60 * PX_PER_MIN, height: 60 * PX_PER_MIN }}
             >
@@ -116,46 +133,56 @@ export function HourTimeline({
               />
             </div>
           ))}
+          <div
+            className="pointer-events-none absolute left-0 right-0 border-t border-black/15"
+            style={{ top: heightPx - 1 }}
+          />
 
-          {/* event layer */}
+          {/* blocks */}
           {laid.map((b) => {
             const top = (b.visStart - rangeStart) * PX_PER_MIN;
-            const hPx = Math.max(18, (b.visEnd - b.visStart) * PX_PER_MIN - 2);
-            const colW = 100 / b.colCount;
-            const left = b.col * colW;
-            const endLabel = fmt(b.startMin + b.durationMin);
+            const blockH = Math.max(
+              20,
+              (b.visEnd - b.visStart) * PX_PER_MIN - 2
+            );
+            // side-by-side columns for overlaps
+            const gap = 3;
+            const widthPct = 100 / b.colCount;
+            const leftPct = b.col * widthPct;
+            const endMin = b.startMin + b.durationMin;
+            const bg = b.done
+              ? "rgba(15,118,110,0.18)"
+              : b.soft
+                ? "rgba(148,163,184,0.28)"
+                : "rgba(29,78,216,0.14)";
+            const border = b.color || (b.isTop3 ? "#0f766e" : "#1d4ed8");
 
             return (
               <div
                 key={b.id}
-                className="absolute z-10 box-border overflow-hidden rounded-lg border border-black/10 px-2 py-1 shadow-sm"
+                className="absolute z-10 box-border overflow-hidden rounded-md border border-black/10 px-1.5 py-1 shadow-sm"
                 style={{
                   top: top + 1,
-                  height: hPx,
-                  left: `calc(${left}% + 3px)`,
-                  width: `calc(${colW}% - 6px)`,
-                  background: b.done
-                    ? "rgba(15,118,110,0.14)"
-                    : b.soft
-                      ? "rgba(148,163,184,0.25)"
-                      : "rgba(29,78,216,0.10)",
-                  opacity: b.soft ? 0.72 : 1,
-                  borderLeft: `4px solid ${
-                    b.color || (b.isTop3 ? "#0f766e" : "#1d4ed8")
-                  }`,
+                  height: blockH,
+                  left: `calc(${leftPct}% + ${gap}px)`,
+                  width: `calc(${widthPct}% - ${gap * 2}px)`,
+                  background: bg,
+                  opacity: b.soft ? 0.75 : 1,
+                  borderLeft: `4px solid ${border}`,
                 }}
+                title={`${b.title}\n${fmt(b.startMin)} – ${fmt(endMin)} (${formatDuration(b.durationMin)})`}
               >
-                <div className="flex h-full flex-col">
+                <div className="flex h-full min-h-0 flex-col">
                   <div className="flex items-start justify-between gap-1">
                     <p
-                      className={`text-[12px] font-semibold leading-snug ${
+                      className={`line-clamp-2 text-[11px] font-semibold leading-tight ${
                         b.done ? "text-muted line-through" : "text-ink"
                       }`}
                     >
                       {b.isTop3 ? `★${b.top3Rank} ` : ""}
                       {b.title}
                     </p>
-                    {onMoveStartHour && b.editable && (
+                    {onMoveStartHour && b.editable !== false && (
                       <select
                         value={Math.floor(b.startMin / 60)}
                         onChange={(e) =>
@@ -165,7 +192,7 @@ export function HourTimeline({
                             b.startMin % 60
                           )
                         }
-                        className="max-w-[3.6rem] shrink-0 rounded border border-black/10 bg-white text-[10px]"
+                        className="max-w-[3.4rem] shrink-0 rounded border border-black/10 bg-white/95 text-[9px]"
                         onClick={(ev) => ev.stopPropagation()}
                       >
                         {moveHours.map((hh) => (
@@ -177,15 +204,17 @@ export function HourTimeline({
                     )}
                   </div>
                   <p className="mt-0.5 text-[10px] font-semibold tabular-nums text-muted">
-                    {fmt(b.startMin)} – {endLabel}
-                    {b.durationMin >= 60
-                      ? ` · ${formatDuration(b.durationMin)}`
-                      : ` · ${b.durationMin}m`}
+                    {fmt(b.startMin)}–{fmt(endMin)}
+                    <span className="font-medium">
+                      {" "}
+                      · {formatDuration(b.durationMin)}
+                    </span>
                   </p>
-                  {hPx >= 56 && (
-                    <p className="mt-auto text-[10px] text-muted">
-                      Spans {Math.ceil(b.durationMin / 60)} hour row
-                      {b.durationMin > 60 ? "s" : ""}
+                  {blockH >= 70 && (
+                    <p className="mt-auto text-[9px] text-muted">
+                      Spans {Math.max(1, Math.round(b.durationMin / 60))}h of
+                      grid
+                      {b.colCount > 1 ? ` · col ${b.col + 1}/${b.colCount}` : ""}
                     </p>
                   )}
                 </div>
@@ -195,22 +224,23 @@ export function HourTimeline({
         </div>
       </div>
 
-      <div className="border-t border-black/5 px-3 py-2 text-[10px] text-muted">
-        Chronological day column — block height matches length (120m = 2 full
-        hours).
+      <div className="border-t border-black/5 px-3 py-2 text-[10px] leading-relaxed text-muted">
+        Example: 10:00–12:00 (120m) draws from the 10:00 line down through 11:00
+        to 12:00. Overlapping blocks share the row as columns.
       </div>
     </div>
   );
 }
 
 function formatDuration(m: number) {
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   const r = m % 60;
   return r ? `${h}h ${r}m` : `${h}h`;
 }
 
 function fmt(min: number) {
-  const m = ((min % (24 * 60)) + 24 * 60) % (24 * 60);
+  const m = ((Math.round(min) % (24 * 60)) + 24 * 60) % (24 * 60);
   const h = Math.floor(m / 60);
   const mm = m % 60;
   return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
@@ -223,58 +253,61 @@ type Laid = TimelineBlock & {
   colCount: number;
 };
 
-function layoutDay(
+/** Assign side-by-side columns for overlapping intervals (interval graph coloring). */
+export function layoutOverlaps(
   blocks: TimelineBlock[],
   rangeStart: number,
   rangeEnd: number
 ): Laid[] {
-  const clipped = blocks
+  const prepared = blocks
     .map((b) => {
-      const dur = Math.max(15, b.durationMin || 30);
-      const start = b.startMin;
-      const end = start + dur;
+      const durationMin = Math.max(15, Number(b.durationMin) || 30);
+      const startMin = Number(b.startMin) || 0;
+      const endMin = startMin + durationMin;
+      const visStart = Math.max(startMin, rangeStart);
+      const visEnd = Math.min(endMin, rangeEnd);
       return {
         ...b,
-        durationMin: dur,
-        startMin: start,
-        visStart: Math.max(start, rangeStart),
-        visEnd: Math.min(end, rangeEnd),
+        startMin,
+        durationMin,
+        visStart,
+        visEnd,
       };
     })
     .filter((b) => b.visEnd > b.visStart)
-    .sort((a, b) => a.visStart - b.visStart || b.durationMin - a.durationMin);
+    .sort(
+      (a, b) => a.visStart - b.visStart || b.durationMin - a.durationMin
+    );
 
-  // column packing for true overlaps only
-  const colEnds: number[] = [];
-  const withCol: (typeof clipped[0] & { col: number })[] = [];
+  // Track when each column becomes free
+  const colFreeAt: number[] = [];
+  const placed: (typeof prepared[0] & { col: number })[] = [];
 
-  for (const b of clipped) {
+  for (const b of prepared) {
     let col = 0;
-    while (col < colEnds.length && colEnds[col] > b.visStart) col++;
-    if (col === colEnds.length) colEnds.push(b.visEnd);
-    else colEnds[col] = b.visEnd;
-    // reset finished columns
-    for (let c = 0; c < colEnds.length; c++) {
-      if (colEnds[c] <= b.visStart) {
-        /* free */
-      }
+    while (col < colFreeAt.length && colFreeAt[col] > b.visStart) {
+      col++;
     }
-    withCol.push({ ...b, col });
+    if (col === colFreeAt.length) colFreeAt.push(b.visEnd);
+    else colFreeAt[col] = b.visEnd;
+    placed.push({ ...b, col });
   }
 
-  // recompute colCount per overlap cluster
+  // For each cluster of mutually overlapping items, colCount = max cols used
   const result: Laid[] = [];
   let i = 0;
-  while (i < withCol.length) {
-    let clusterEnd = withCol[i].visEnd;
+  while (i < placed.length) {
+    let clusterEnd = placed[i].visEnd;
     let j = i + 1;
-    while (j < withCol.length && withCol[j].visStart < clusterEnd) {
-      clusterEnd = Math.max(clusterEnd, withCol[j].visEnd);
+    while (j < placed.length && placed[j].visStart < clusterEnd) {
+      clusterEnd = Math.max(clusterEnd, placed[j].visEnd);
       j++;
     }
-    const cluster = withCol.slice(i, j);
+    const cluster = placed.slice(i, j);
     const colCount = Math.max(1, ...cluster.map((c) => c.col + 1));
-    for (const c of cluster) result.push({ ...c, colCount });
+    for (const c of cluster) {
+      result.push({ ...c, colCount });
+    }
     i = j;
   }
   return result;

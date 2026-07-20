@@ -314,17 +314,21 @@ export default function TodayHomePage() {
           </p>
         ) : (
           <HourTimeline
-            startHour={Math.min(
-              6,
-              ...planItems.map((i) => i.startHour),
-              6
+            startHour={Math.max(
+              0,
+              Math.min(6, ...planItems.map((i) => i.startHour))
             )}
             endHour={Math.min(
               24,
               Math.max(
-                21,
+                22,
                 ...planItems.map((i) =>
-                  Math.ceil((i.startHour * 60 + i.startMinute + i.durationMinutes) / 60)
+                  Math.ceil(
+                    (i.startHour * 60 +
+                      i.startMinute +
+                      Math.max(15, i.durationMinutes)) /
+                      60
+                  )
                 )
               ) + 1
             )}
